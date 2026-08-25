@@ -37,15 +37,12 @@ describe("RPC session event projection", () => {
 		});
 		const output = mock((_value: unknown) => undefined);
 		expect(() =>
-			projectRpcSessionEvent(
-				event,
-				{
-					projectSessionEvent: () => {
-						throw new Error("projection failed");
-					},
-					terminateOnProjectionFailure: terminate,
+			projectRpcSessionEvent(event, {
+				projectSessionEvent: () => {
+					throw new Error("projection failed");
 				},
-			),
+				terminateOnProjectionFailure: terminate,
+			}),
 		).toThrow("terminated");
 		expect(terminate).toHaveBeenCalledTimes(1);
 		expect(output).not.toHaveBeenCalled();
@@ -65,7 +62,7 @@ describe("RPC session event projection", () => {
 	it("projects the session subscription before invoking output", () => {
 		const output = mock((_value: AgentSessionEvent) => undefined);
 		const listener = createRpcSessionEventOutput(output, {
-			projectSessionEvent: current => ({ action: "replace", event: { type: "turn_start" } }),
+			projectSessionEvent: () => ({ action: "replace", event: { type: "turn_start" } }),
 		});
 		listener(event);
 		expect(output).toHaveBeenCalledWith({ type: "turn_start" });

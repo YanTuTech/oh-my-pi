@@ -1,14 +1,9 @@
-import { HookEditorComponent, HookInputComponent, HookSelectorComponent } from "./modes/components";
-
-// Core session management
+/** Headless SDK/runtime surface. Terminal UI entrypoints are not exported. */
 
 export * as zod from "@oh-my-pi/omptype/zod";
 export { z } from "@oh-my-pi/omptype/zod";
-// Re-export TUI components for custom tool rendering
-export { Container, Markdown, Spacer, Text } from "@oh-my-pi/pi-tui";
 // Logging
 export { getAgentDir, logger, VERSION } from "@oh-my-pi/pi-utils";
-export * from "./config/keybindings";
 export * from "./config/model-registry";
 // Prompt templates
 export type * from "./config/prompt-templates";
@@ -29,13 +24,10 @@ export * from "./extensibility/skills";
 // Slash commands
 export { type FileSlashCommand, loadSlashCommands as discoverSlashCommands } from "./extensibility/slash-commands";
 export type * from "./lsp";
-// Main entry point
-export * from "./main";
-// Run modes for programmatic SDK usage
-export * from "./modes";
-export * from "./modes/components";
-// Theme utilities for custom tools
-export * from "./modes/theme/theme";
+// Headless protocol client and wire types.
+export * from "./modes/rpc/rpc-client";
+export * from "./modes/rpc/rpc-mode";
+export * from "./modes/rpc/rpc-types";
 // SDK for programmatic usage
 export * from "./sdk";
 export * from "./session/agent-session";
@@ -58,9 +50,3 @@ export type * from "./task/types";
 // Tools (detail types and utilities)
 export * from "./tools";
 export * from "./utils/git";
-// UI components for extensions
-export {
-	HookEditorComponent as ExtensionEditorComponent,
-	HookInputComponent as ExtensionInputComponent,
-	HookSelectorComponent as ExtensionSelectorComponent,
-};

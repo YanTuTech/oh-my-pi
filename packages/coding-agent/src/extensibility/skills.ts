@@ -13,10 +13,10 @@ import type { SkillsSettings } from "../config/settings";
 import { type Skill as CapabilitySkill, loadCapability } from "../discovery";
 import { compareSkillOrder, scanSkillsFromDir } from "../discovery/helpers";
 import {
-	isContextReadAllowedAsync,
-	parseRuntimePolicy,
 	type DigestProtectedPaths,
+	isContextReadAllowedAsync,
 	type PolicyLimits,
+	parseRuntimePolicy,
 } from "../policy/runtime-policy";
 import autoloadTemplate from "../prompts/skills/autoload.md" with { type: "text" };
 import userInvocationTemplate from "../prompts/skills/user-invocation.md" with { type: "text" };

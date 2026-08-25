@@ -135,16 +135,10 @@ describe("scanner-level symlink skip", () => {
 
 		const readSpy = spyOn(fsCap, "readFile");
 		try {
-			const result = await loadFilesFromDir<{ name: string; content: string }>(
-				ctx(),
-				cmdsRoot,
-				"test",
-				"user",
-				{
-					extensions: ["md"],
-					transform: (name, content) => ({ name, content }),
-				},
-			);
+			const result = await loadFilesFromDir<{ name: string; content: string }>(ctx(), cmdsRoot, "test", "user", {
+				extensions: ["md"],
+				transform: (name, content) => ({ name, content }),
+			});
 
 			const names = result.items.map(i => i.name);
 			expect(names).toContain("ok.md");
