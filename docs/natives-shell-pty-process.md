@@ -203,43 +203,6 @@ Current JS surface is the `Process` class:
 
 The platform-specific implementation lives in `pi_shell::process`; `crates/pi-natives/src/ps.rs` is a N-API shim plus re-exports used by PTY termination.
 
-## Key parsing subsystem (`keys`)
-
-### API model
-
-Exposed helpers:
-
-- `parseKey(data, kittyProtocolActive)`
-- `matchesKey(data, keyId, kittyProtocolActive)`
-- `parseKittySequence(data)`
-- `matchesKittySequence(data, expectedCodepoint, expectedModifier)`
-- `matchesLegacySequence(data, keyName)`
-
-### Parsing model
-
-The parser combines:
-
-- direct single-byte mappings (`enter`, `tab`, `ctrl+<letter>`, printable ASCII),
-- O(1) legacy escape-sequence lookup (PHF map),
-- xterm `modifyOtherKeys` parsing,
-- Kitty protocol parsing (`CSI u`, `CSI ~`, `CSI 1;...<letter>`),
-- normalization to key IDs (`ctrl+c`, `shift+tab`, `pageUp`, `f5`, etc.).
-
-Modifier handling:
-
-- only shift/alt/ctrl/super bits are compared for key matching,
-- lock bits are masked out before comparisons.
-
-Layout behavior:
-
-- base-layout fallback is intentionally constrained so remapped layouts do not create false matches for ASCII letters/symbols.
-
-### Failure behavior
-
-- Unrecognized or invalid sequences produce `null` from parse functions.
-- Match functions return `false` on parse failure or mismatch.
-- No thrown error surface for malformed key input.
-
 ## JS API ↔ Rust export mapping
 
 ### Shell + PTY + Process
@@ -264,16 +227,6 @@ Layout behavior:
 | `process.waitForExit(options?)`              | `Process::wait_for_exit`           | Async exit wait                                  |
 | `process.children()`                         | `Process::children`                | Direct children as `Process[]`                   |
 | `process.status()`                           | `Process::status`                  | `running` / `exited`                             |
-
-### Keys
-
-| JS API                                         | Rust N-API export                                   | Notes                           |
-| ---------------------------------------------- | --------------------------------------------------- | ------------------------------- |
-| `matchesKittySequence(data, cp, mod)`          | `matchesKittySequence` (`matches_kitty_sequence`)   | Kitty codepoint+modifier match  |
-| `parseKey(data, kittyProtocolActive)`          | `parseKey` (`parse_key`)                            | Normalized key-id parser        |
-| `matchesLegacySequence(data, keyName)`         | `matchesLegacySequence` (`matches_legacy_sequence`) | Exact legacy sequence map check |
-| `parseKittySequence(data)`                     | `parseKittySequence` (`parse_kitty_sequence`)       | Structured Kitty parse result   |
-| `matchesKey(data, keyId, kittyProtocolActive)` | `matchesKey` (`matches_key`)                        | High-level key matcher          |
 
 ## Abandoned session cleanup and finalization notes
 

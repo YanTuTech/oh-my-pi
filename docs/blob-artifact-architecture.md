@@ -121,7 +121,7 @@ If a blob is missing:
 
 Behavior:
 
-1. Every chunk is sanitized with `sanitizeWithOptionalSixelPassthrough(..., sanitizeText)` and appended to in-memory accounting.
+1. Every chunk is sanitized with `sanitizeText` and appended to in-memory accounting.
 2. Optional live `onChunk` receives sanitized pre-column-cap chunks, throttled if configured.
 3. A per-line column cap can drop bytes from long lines in the LLM-facing buffer; when this happens, artifact mirroring starts so the on-disk file keeps the full sanitized stream.
 4. When the in-memory tail buffer would exceed spill threshold (`DEFAULT_MAX_BYTES`, 50KB), sink marks output truncated and starts artifact mirroring if an artifact path is available.
@@ -131,7 +131,7 @@ Behavior:
 
 Practical effect:
 
-- UI/tool return shows bounded output,
+- host/tool return shows bounded output,
 - full sanitized output is preserved in artifact file and referenced as `artifact://<id>` when file-backed artifact mirroring succeeded.
 
 If file sink creation fails (I/O error, missing path, etc.), sink falls back to in-memory truncation only; full output is not persisted.

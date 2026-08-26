@@ -78,7 +78,7 @@ Failure output is not thrown at the tool boundary when providers are unavailable
 
 Streaming: none. `WebSearchTool.execute()` forwards its `AbortSignal` into `executeSearch()`, and `executeSearch()` passes it to providers. If the signal is aborted during fallback handling, `throwIfAborted(signal)` rethrows the cancellation instead of returning an `"Error: ..."` text result.
 
-Each provider search transport receives a hard timeout from `providers.webSearchTimeoutSeconds` (default `60`, maximum `300`). When that transport exceeds the ceiling, the automatic chain records the provider failure and advances to the next candidate. The setting is not a whole-chain deadline, and providers may impose shorter upstream, retry, or aggregate limits. Set a positive number of seconds, for example `omp config set providers.webSearchTimeoutSeconds 180` for slower model-backed search.
+Each provider search transport receives a hard timeout from `providers.webSearchTimeoutSeconds` (default `60`, maximum `300`). When that transport exceeds the ceiling, the automatic chain records the provider failure and advances to the next candidate. The setting is not a whole-chain deadline, and providers may impose shorter upstream, retry, or aggregate limits. Set a positive number of seconds in `config.yml`, for example `providers.webSearchTimeoutSeconds: 180` for slower model-backed search.
 
 ## Flow
 1. `WebSearchTool.execute()` in `packages/coding-agent/src/web/search/index.ts` delegates directly to `executeSearch()`.
@@ -152,7 +152,7 @@ Each provider search transport receives a hard timeout from `providers.webSearch
     - `limit` and `num_search_results` are collapsed together before dispatch.
     - Output may include parsed free-text `answer`, `sources`, `requestId`.
   - **Exa** — `packages/coding-agent/src/web/search/providers/exa.ts`
-    - Availability: `EXA_API_KEY` or a stored credential for `exa` (including one added through `/login exa`) admits Exa to the auto chain; settings must not explicitly disable `exa.enabled` or `exa.enableSearch`. Explicit selection (listing `exa` in `providers.webSearchOrder`, or a forced `provider: exa`) reaches Exa even without a credential and falls back to public MCP.
+    - Availability: `EXA_API_KEY` or a stored `exa` credential admits Exa to the auto chain; settings must not explicitly disable `exa.enabled` or `exa.enableSearch`. Explicit selection (listing `exa` in `providers.webSearchOrder`, or a forced `provider: exa`) reaches Exa even without a credential and falls back to public MCP.
     - Querying: POST `https://api.exa.ai/search` with the resolved Exa API key, otherwise JSON-RPC `tools/call` against `https://mcp.exa.ai/mcp` for remote MCP tool `web_search_exa`.
     - `limit` and `num_search_results` are collapsed together before dispatch.
     - Output: synthesized `answer` from up to 3 result summaries, `sources`, `requestId`.
@@ -282,4 +282,4 @@ Each provider search transport receives a hard timeout from `providers.webSearch
 - `recency` has native or engine-query mappings in Brave, Perplexity, Tavily, SearXNG, Kagi, TinyFish, Firecrawl, DuckDuckGo, Startpage, Google, and Mojeek. xAI retains absolute date directives as natural-language query hints because its current Responses tool has no date parameters; Ecosia ignores recency. Public Web passes the request through to its engines.
 - `packages/coding-agent/src/config/settings-schema.ts` uses the shared `SEARCH_PROVIDER_PREFERENCES` / `SEARCH_PROVIDER_OPTIONS` metadata, so the settings selector and setup wizard expose `auto` plus every provider in the auto chain.
 - The credential-free scrapers close the auto chain: Startpage and DuckDuckGo precede the browser-backed Ecosia, Google, and Mojeek paths; `public` is listed last and never auto-selected.
-- `/login exa` stores the pasted key in AuthStorage; Exa resolves stored or environment credentials before the unauthenticated `https://mcp.exa.ai/mcp` fallback.
+- Host credential provisioning stores the Exa key in `AuthStorage`; Exa resolves stored or environment credentials before the unauthenticated `https://mcp.exa.ai/mcp` fallback.

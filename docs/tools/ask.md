@@ -6,7 +6,7 @@
 - Entry: `packages/coding-agent/src/tools/ask.ts`
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/ask.md`
 - Key collaborators:
-  - `packages/coding-agent/src/config/settings-schema.ts` — `ask.timeout` / `ask.notify` defaults
+  - `packages/coding-agent/src/config/settings-schema.ts` — `ask.timeout` default
   - `packages/coding-agent/src/extensibility/ui-contract.ts` — host interaction contract
   - `packages/coding-agent/src/modes/rpc/rpc-mode.ts` and `src/modes/acp/acp-agent.ts` — protocol projection
 
@@ -43,7 +43,7 @@
 1. `AskTool.createIf()` registers the discoverable tool only when the session can reach a human through its host interaction contract; fully headless sessions never get it.
 2. `execute()` requires the compatibility fields `context.hasUI` and `context.ui`; here `ui` names the host interaction protocol, not a bundled renderer. If missing it aborts the context and throws `ToolAbortError("Ask tool requires interactive mode")`.
 3. It reads `ask.timeout` from settings, converts seconds to milliseconds (`0` disables timeout), and disables timeout entirely while plan mode is enabled.
-4. If `ask.notify` is not `off`, it asks the host to notify `Waiting for input`. When `speech.enabled` is true, it also sends all question text to the vocalizer before requesting input.
+4. When `speech.enabled` is true, it sends all question text to the vocalizer before requesting input.
 5. When the host supplies `askDialog`, the tool requests one rich multi-question form. Rich options receive `header`, `description`, and `preview`; results may contain an answer note or choose the dialog's `Chat about this` redirect.
 6. Otherwise it uses the host selector/editor methods for each question:
    - single-select list plus `Other (type your own)`
@@ -66,7 +66,6 @@
   - Uses `context.ui.askDialog(...)` when the host offers the rich form API; otherwise uses the selector/editor methods.
   - Opens a selection dialog via `context.ui.select(...)`.
   - Opens a text editor dialog via `context.ui.editor(...)` for `Other`.
-  - Sends a terminal notification unless `ask.notify=off`.
   - Speaks the question text through the vocalizer when `speech.enabled=true`.
 - Session state
   - Reads plan-mode state to disable timeouts.
@@ -94,4 +93,4 @@
 - In fallback single-select mode the returned `selectedOptions` value strips the appended ` (Recommended)` suffix.
 - Multi-select results preserve selection order by `Set` insertion order, not original option order after arbitrary toggles.
 - Option labels and prompt text are returned verbatim in `details`. Descriptions/previews/header guide presentation but are not copied into result details.
-- `/tree` can recover the schema-valid original `questions` from a persisted `ask` call and re-open it to create a sibling answer branch; malformed legacy arguments fail closed.
+- Host-driven session-tree navigation can recover the schema-valid original `questions` from a persisted `ask` call and re-open it to create a sibling answer branch; malformed legacy arguments fail closed.

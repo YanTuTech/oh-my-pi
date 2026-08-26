@@ -1,0 +1,299 @@
+{
+	"version": 1,
+	"runtimePackage": "packages/coding-agent",
+	"requiredWorkspacePaths": [
+		"packages/agent/src",
+		"packages/ai/src",
+		"packages/catalog/src",
+		"packages/coding-agent/src/index.ts",
+		"packages/coding-agent/src/runtime-api.ts",
+		"packages/coding-agent/src/runtime-acp-host.ts",
+		"packages/coding-agent/src/runtime-rpc-host.ts",
+		"packages/coding-agent/src/sdk.ts",
+		"packages/coding-agent/src/session/agent-session.ts",
+		"packages/coding-agent/src/task/executor.ts",
+		"packages/coding-agent/src/tools",
+		"packages/coding-agent/src/modes/acp",
+		"packages/coding-agent/src/modes/rpc",
+		"packages/coding-agent/src/export/html",
+		"packages/coding-agent/src/extensibility",
+		"packages/mnemopi/src",
+		"packages/natives/native",
+		"packages/omptype/src",
+		"packages/snapcompact/src",
+		"packages/stats/src",
+		"packages/utils/src",
+		"packages/wire/src"
+	],
+	"forbiddenWorkspacePaths": [
+		"packages/tui",
+		"packages/coding-agent/src/main.ts",
+		"packages/coding-agent/src/cli",
+		"packages/coding-agent/src/commands",
+		"packages/coding-agent/src/tui",
+		"packages/coding-agent/src/modes/interactive-mode.ts",
+		"packages/coding-agent/src/modes/print-mode.ts",
+		"packages/coding-agent/src/modes/components",
+		"packages/coding-agent/src/modes/controllers",
+		"packages/coding-agent/src/modes/composer",
+		"packages/coding-agent/src/modes/setup-wizard",
+		"packages/coding-agent/src/modes/theme",
+		"packages/coding-agent/src/modes/utils",
+		"packages/coding-agent/src/startup-splash.ts",
+		"packages/coding-agent/src/cleanse/board.ts",
+		"packages/coding-agent/src/autoresearch/dashboard-runtime.ts",
+		"packages/coding-agent/src/config/appearance-settings-adapter.ts",
+		"packages/coding-agent/src/utils/sixel.ts",
+		"packages/utils/src/stderr-guard.ts",
+		"packages/utils/src/terminal-host.ts",
+		"crates/pi-natives/src/appearance.rs",
+		"crates/pi-natives/src/highlight.rs",
+		"crates/pi-natives/src/keys.rs",
+		"crates/pi-natives/src/sixel.rs",
+		"crates/pi-natives/src/spelling.rs",
+		"crates/pi-natives/src/syntaxes",
+		"crates/pi-natives/src/tty_writer.rs"
+	],
+	"requiredBuildEntrypoints": [
+		"packages/coding-agent/src/index.ts",
+		"packages/coding-agent/src/runtime-api.ts",
+		"packages/coding-agent/src/runtime-acp-host.ts",
+		"packages/coding-agent/src/runtime-rpc-host.ts",
+		"packages/coding-agent/src/export/html/index.ts"
+	],
+	"requiredPackageExports": [
+		{
+			"subpath": ".",
+			"source": "./src/index.ts"
+		},
+		{
+			"subpath": "./runtime",
+			"source": "./src/runtime-api.ts"
+		},
+		{
+			"subpath": "./export/html",
+			"source": "./src/export/html/index.ts"
+		}
+	],
+	"requiredRootSymbols": [
+		"AuthStorage",
+		"ModelRegistry",
+		"SessionManager",
+		"Settings",
+		"createAgentSession",
+		"createAcpConnection",
+		"RpcClient",
+		"defineRpcClientTool",
+		"runRpcMode",
+		"projectRpcSessionEvent"
+	],
+	"requiredEmbeddedRuntimeSymbols": [
+		"AuthStorage",
+		"ModelRegistry",
+		"SessionManager",
+		"Settings",
+		"createAgentSession",
+		"loadExtensions",
+		"loadSkills"
+	],
+	"forbiddenEmbeddedRuntimeSymbols": [
+		"RpcClient",
+		"createAcpConnection",
+		"runRpcMode",
+		"toolRenderers"
+	],
+	"requiredHtmlExportSymbols": [
+		"exportSessionToHtml",
+		"buildSessionData"
+	],
+	"blockedPackageExports": [
+		"./main",
+		"./cli",
+		"./cli/*",
+		"./commands/*",
+		"./modes/interactive-mode",
+		"./modes/composer",
+		"./modes/components",
+		"./modes/components/*",
+		"./modes/controllers/*",
+		"./modes/setup-wizard",
+		"./modes/setup-wizard/*",
+		"./modes/theme/*",
+		"./modes/utils/*",
+		"./tui",
+		"./tui/*"
+	],
+	"forbiddenPublicSymbols": [
+		"Container",
+		"ExtensionEditorComponent",
+		"toolRenderers",
+		"renderDefaultToolExecution"
+	],
+	"forbiddenModelResolverSymbols": ["findInitialModel", "restoreModelFromSession"],
+	"forbiddenNativeExportSymbols": [
+		"HighlightColors",
+		"HighlightStream",
+		"KeyEventType",
+		"MacAppearanceObserver",
+		"MacOSAppearance",
+		"ParsedKittyResult",
+		"SpellingRange",
+		"TtyWriter",
+		"detectMacOSAppearance",
+		"encodeSixel",
+		"getSupportedLanguages",
+		"highlightCode",
+		"macOSCheckSpelling",
+		"macOSSpellCheckerAvailable",
+		"macOSSpellingGuesses",
+		"matchesKey",
+		"matchesKittySequence",
+		"matchesLegacySequence",
+		"parseKey",
+		"parseKittySequence",
+		"setHangulCompatJamoWidthOverride",
+		"supportsLanguage",
+		"warmHighlighter"
+	],
+	"forbiddenSettingPaths": [
+		"theme.dark",
+		"theme.light",
+		"symbolPreset",
+		"colorBlindMode",
+		"composer.shape",
+		"statusLine.preset",
+		"statusLine.separator",
+		"statusLine.contextLine",
+		"statusLine.sessionAccent",
+		"statusLine.transparent",
+		"statusLine.compactThinkingLevel",
+		"statusLine.showHookStatus",
+		"statusLine.leftSegments",
+		"statusLine.rightSegments",
+		"statusLine.segmentOptions",
+		"terminal.showImages",
+		"terminal.showProgress",
+		"tui.maxInlineImageColumns",
+		"tui.maxInlineImageRows",
+		"tui.maxInlineImages",
+		"tui.resizeScrollback",
+		"tui.textSizing",
+		"tui.renderMermaid",
+		"tui.codexResetFireworks",
+		"tui.titleState",
+		"tui.hyperlinks",
+		"tui.tight",
+		"tui.imeSafeCursor",
+		"display.shimmer",
+		"display.smoothStreaming",
+		"display.hideToolActivity",
+		"display.showTokenUsage",
+		"display.cacheMissMarker",
+		"display.collapseCompacted",
+		"showHardwareCursor",
+		"hideThinkingBlock",
+		"proseOnlyThinking",
+		"doubleEscapeAction",
+		"treeFilterMode",
+		"autocompleteMaxVisible",
+		"spelling.typoDetection",
+		"spelling.autocomplete",
+		"spelling.autocorrect",
+		"emojiAutocomplete",
+		"paste.largeMenuThreshold",
+		"startup.showSplash",
+		"startup.setupWizard",
+		"startup.checkUpdate",
+		"update.channel",
+		"marketplace.autoUpdate",
+		"completion.notify",
+		"error.notify",
+		"ask.notify"
+	],
+	"forbiddenRuntimeDependencies": [
+		"@oh-my-pi/pi-tui",
+		"react",
+		"react-dom",
+		"ink",
+		"blessed",
+		"terminal-kit"
+	],
+	"forbiddenBuildInputFragments": [
+		"packages/tui/",
+		"packages/coding-agent/src/cli/",
+		"packages/coding-agent/src/commands/",
+		"packages/coding-agent/src/modes/components/",
+		"packages/coding-agent/src/modes/controllers/",
+		"packages/coding-agent/src/modes/composer/",
+		"packages/coding-agent/src/modes/setup-wizard/",
+		"packages/coding-agent/src/modes/theme/",
+		"packages/coding-agent/src/autoresearch/dashboard-runtime.ts",
+		"packages/coding-agent/src/cleanse/board.ts",
+		"packages/coding-agent/src/config/appearance-settings-adapter.ts",
+		"packages/coding-agent/src/startup-splash.ts",
+		"packages/coding-agent/src/utils/sixel.ts",
+		"packages/utils/src/chalk.ts",
+		"packages/utils/src/stderr-guard.ts",
+		"packages/utils/src/terminal-host.ts",
+		"node_modules/@oh-my-pi/pi-tui/",
+		"node_modules/react/",
+		"node_modules/react-dom/",
+		"node_modules/ink/",
+		"node_modules/blessed/",
+		"node_modules/terminal-kit/"
+	],
+	"retainedExceptions": [
+		{
+			"path": "packages/coding-agent/src/cli.ts",
+			"reason": "Internal hidden worker re-entry dispatcher; the public ./cli export remains blocked."
+		},
+		{
+			"path": "packages/coding-agent/src/extensibility/ui-contract.ts",
+			"reason": "Structural RPC, ACP, and extension compatibility types plus a plain-text Runtime theme; it has no terminal implementation."
+		},
+		{
+			"path": "packages/coding-agent/src/extensibility/extensions/types.ts",
+			"reason": "Third-party extension compatibility retains shortcut, composer, flag, and theme signatures without shipping a local UI consumer."
+		},
+		{
+			"path": "packages/coding-agent/src/slash-commands",
+			"reason": "Runtime command routing and reserved-name compatibility used by hosts and extensions, not an interactive terminal implementation."
+		},
+		{
+			"path": "packages/coding-agent/src/export/html",
+			"reason": "Standalone HTML session export is an explicitly retained Runtime output capability."
+		},
+		{
+			"path": "packages/collab-web",
+			"reason": "Private build-time source for standalone HTML tool views; it is not a published Runtime dependency or application client."
+		},
+		{
+			"path": "packages/browser-relay",
+			"reason": "Browser-tool transport for attaching to Chrome tabs; it is a Runtime tool capability rather than an Agent application UI."
+		},
+		{
+			"path": "packages/stats",
+			"reason": "Headless session analytics and usage aggregation with no executable or dashboard."
+		},
+		{
+			"path": "packages/utils/src/cli.ts",
+			"reason": "Published argument-parsing compatibility subpath used by external or development hosts; it does not install an executable or implement a terminal UI."
+		},
+		{
+			"path": "packages/coding-agent/src/compress",
+			"reason": "Published headless compression workflow API; removing it would change functionality even though the removed end-user command registry no longer calls it."
+		},
+		{
+			"path": "packages/coding-agent/src/commit",
+			"reason": "Published commit workflow and shared Git/message utilities; external hosts may import its subpaths and Runtime code still uses its parsing helpers."
+		},
+		{
+			"path": "packages/coding-agent/src/modes/acp/terminal-auth.ts",
+			"reason": "ACP terminal-auth capability and argument contract; removing it would change the observable ACP initialize/authentication protocol."
+		},
+		{
+			"path": "packages/coding-agent/src/config/model-resolver.ts",
+			"reason": "Core Runtime model matching, routing, role, and thinking-level resolution without the removed CLI-only initial-selection output functions."
+		}
+	]
+}

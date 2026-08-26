@@ -8,8 +8,7 @@ import {
 } from "@oh-my-pi/pi-coding-agent/session/session-entries";
 import { loadEntriesFromFile } from "@oh-my-pi/pi-coding-agent/session/session-loader";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
-import { getAgentDir, getTerminalSessionsDir, removeWithRetries, setAgentDir, TempDir } from "@oh-my-pi/pi-utils";
-import { getTerminalId } from "@oh-my-pi/pi-utils/terminal-host";
+import { TempDir } from "@oh-my-pi/pi-utils";
 
 interface JsonlMessageEntry {
 	type: "message";
@@ -48,77 +47,53 @@ async function createSessionWithArtifacts(root: string): Promise<{
 }
 
 describe("SessionManager.forkFrom", () => {
-	it("suppresses terminal breadcrumbs while preserving source history under a new parented session", async () => {
+	it("preserves source history under a new parented session", async () => {
 		using tempDir = TempDir.createSync("@omp-session-fork-");
-		const previousAgentDir = getAgentDir();
-		const previousTermSessionId = process.env.TERM_SESSION_ID;
-		setAgentDir(path.join(tempDir.path(), "agent"));
-		process.env.TERM_SESSION_ID = "omp-fork-test";
-		try {
-			const cwd = path.join(tempDir.path(), "project");
-			const sessionDir = path.join(tempDir.path(), "sessions");
-			await fs.mkdir(sessionDir, { recursive: true });
-			const sourceFile = path.join(sessionDir, "source.jsonl");
-			const timestamp = new Date().toISOString();
-			const sourceHeader: SessionHeader = {
-				type: "session",
-				version: CURRENT_SESSION_VERSION,
-				id: "source-session",
-				timestamp,
-				cwd,
-			};
-			const sourceMessage: JsonlMessageEntry = {
-				type: "message",
-				id: "message-1",
-				parentId: null,
-				timestamp,
-				message: { role: "user", content: "hello", timestamp: Date.now() },
-			};
-			const sourceText = `${JSON.stringify(sourceHeader)}\n${JSON.stringify(sourceMessage)}\n`;
-			await Bun.write(sourceFile, sourceText);
+		const cwd = path.join(tempDir.path(), "project");
+		const sessionDir = path.join(tempDir.path(), "sessions");
+		await fs.mkdir(sessionDir, { recursive: true });
+		const sourceFile = path.join(sessionDir, "source.jsonl");
+		const timestamp = new Date().toISOString();
+		const sourceHeader: SessionHeader = {
+			type: "session",
+			version: CURRENT_SESSION_VERSION,
+			id: "source-session",
+			timestamp,
+			cwd,
+		};
+		const sourceMessage: JsonlMessageEntry = {
+			type: "message",
+			id: "message-1",
+			parentId: null,
+			timestamp,
+			message: { role: "user", content: "hello", timestamp: Date.now() },
+		};
+		const sourceText = `${JSON.stringify(sourceHeader)}\n${JSON.stringify(sourceMessage)}\n`;
+		await Bun.write(sourceFile, sourceText);
 
-			const terminalId = getTerminalId();
-			expect(terminalId).toBeString();
-			const breadcrumbFile = path.join(getTerminalSessionsDir(), terminalId ?? "missing");
-			await removeWithRetries(breadcrumbFile);
+		const forked = await SessionManager.forkFrom(sourceFile, cwd, sessionDir);
+		const cloneFile = forked.getSessionFile();
+		expect(cloneFile).toBeString();
+		if (!cloneFile) throw new Error("expected forked session file");
 
-			const forked = await SessionManager.forkFrom(sourceFile, cwd, sessionDir, undefined, {
-				suppressBreadcrumb: true,
-			});
-			await Bun.sleep(10);
-			const cloneFile = forked.getSessionFile();
-			expect(cloneFile).toBeString();
-			if (!cloneFile) throw new Error("expected forked session file");
+		expect(await Bun.file(sourceFile).text()).toBe(sourceText);
+		expect(cloneFile).not.toBe(sourceFile);
 
-			expect(await Bun.file(sourceFile).text()).toBe(sourceText);
-			expect(await Bun.file(breadcrumbFile).exists()).toBe(false);
-			expect(cloneFile).not.toBe(sourceFile);
-
-			const cloneEntries = await loadEntriesFromFile(cloneFile);
-			const cloneHeader = cloneEntries.find((entry): entry is SessionHeader => entry.type === "session");
-			const cloneMessage = cloneEntries.find((entry): entry is SessionMessageEntry => entry.type === "message");
-			expect(cloneHeader?.id).not.toBe(sourceHeader.id);
-			expect(cloneHeader?.parentSession).toBe(sourceHeader.id);
-			expect(cloneHeader?.cwd).toBe(cwd);
-			if (cloneMessage?.message.role !== "user") throw new Error("expected forked user message");
-			expect(cloneMessage.message.content).toBe("hello");
-		} finally {
-			if (previousTermSessionId === undefined) {
-				delete process.env.TERM_SESSION_ID;
-			} else {
-				process.env.TERM_SESSION_ID = previousTermSessionId;
-			}
-			setAgentDir(previousAgentDir);
-		}
+		const cloneEntries = await loadEntriesFromFile(cloneFile);
+		const cloneHeader = cloneEntries.find((entry): entry is SessionHeader => entry.type === "session");
+		const cloneMessage = cloneEntries.find((entry): entry is SessionMessageEntry => entry.type === "message");
+		expect(cloneHeader?.id).not.toBe(sourceHeader.id);
+		expect(cloneHeader?.parentSession).toBe(sourceHeader.id);
+		expect(cloneHeader?.cwd).toBe(cwd);
+		if (cloneMessage?.message.role !== "user") throw new Error("expected forked user message");
+		expect(cloneMessage.message.content).toBe("hello");
 	});
 
 	it("copies source artifacts recursively into the fork by default", async () => {
 		using tempDir = TempDir.createSync("@omp-session-fork-artifacts-");
 		const { cwd, sessionDir, sourceFile, sourceArtifactsDir } = await createSessionWithArtifacts(tempDir.path());
 
-		const forked = await SessionManager.forkFrom(sourceFile, cwd, sessionDir, undefined, {
-			suppressBreadcrumb: true,
-		});
+		const forked = await SessionManager.forkFrom(sourceFile, cwd, sessionDir);
 		const forkFile = forked.getSessionFile();
 		if (!forkFile) throw new Error("expected forked session file");
 		const forkArtifactsDir = forkFile.slice(0, -".jsonl".length);
@@ -134,7 +109,6 @@ describe("SessionManager.forkFrom", () => {
 
 		const forked = await SessionManager.forkFrom(sourceFile, cwd, sessionDir, undefined, {
 			copyArtifacts: false,
-			suppressBreadcrumb: true,
 		});
 		const forkFile = forked.getSessionFile();
 		if (!forkFile) throw new Error("expected forked session file");
@@ -161,9 +135,7 @@ describe("SessionManager.forkFrom", () => {
 		await Bun.write(sourceFile, `${JSON.stringify(sourceHeader)}\n`);
 		await Bun.write(unrelatedFile, "must not be copied");
 
-		const forked = await SessionManager.forkFrom(sourceFile, cwd, forkDir, undefined, {
-			suppressBreadcrumb: true,
-		});
+		const forked = await SessionManager.forkFrom(sourceFile, cwd, forkDir);
 		const forkFile = forked.getSessionFile();
 		if (!forkFile) throw new Error("expected forked session file");
 		const forkArtifactsDir = forkFile.slice(0, -".jsonl".length);

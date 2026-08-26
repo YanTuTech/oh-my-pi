@@ -49,36 +49,6 @@ import {
 
 export type ModelRoleStorage = "global" | "project";
 
-export type ContextLineMode = "off" | "percentage" | "annotated" | "embedded";
-export const CONTEXT_LINE_MODE_VALUES = ["off", "percentage", "annotated", "embedded"] as const;
-
-/** Status line segment identifiers */
-export type StatusLineSegmentId =
-	| "pi"
-	| "model"
-	| "mode"
-	| "path"
-	| "git"
-	| "pr"
-	| "subagents"
-	| "token_in"
-	| "token_out"
-	| "token_total"
-	| "token_rate"
-	| "cost"
-	| "context_pct"
-	| "context_total"
-	| "time_spent"
-	| "time"
-	| "session"
-	| "hostname"
-	| "cache_read"
-	| "cache_write"
-	| "cache_hit"
-	| "session_name"
-	| "usage"
-	| "collab";
-
 /** Marks a setting whose value must never be printed or exported implicitly. */
 interface CredentialMarker {
 	credential?: true;
@@ -298,69 +268,6 @@ export const SETTINGS_SCHEMA = {
 
 	cycleOrder: { type: "array", default: DEFAULT_CYCLE_ORDER },
 
-	// ────────────────────────────────────────────────────────────────────────
-	// Appearance
-	// ────────────────────────────────────────────────────────────────────────
-
-	// Theme
-	"theme.dark": {
-		type: "string",
-		default: "titanium",
-	},
-
-	"theme.light": {
-		type: "string",
-		default: "light",
-	},
-
-	symbolPreset: {
-		type: "enum",
-		values: ["unicode", "nerd", "ascii"] as const,
-		default: "unicode",
-	},
-
-	colorBlindMode: {
-		type: "boolean",
-		default: false,
-	},
-	// Composer
-	"composer.shape": {
-		type: "string",
-		default: "box",
-	},
-
-	// Status line
-	"statusLine.preset": {
-		type: "enum",
-		values: ["default", "minimal", "compact", "full", "nerd", "ascii", "custom"] as const,
-		default: "default",
-	},
-
-	"statusLine.separator": {
-		type: "enum",
-		values: ["powerline", "powerline-thin", "slash", "pipe", "block", "none", "ascii"] as const,
-		default: "powerline-thin",
-	},
-
-	"statusLine.contextLine": {
-		type: "enum",
-		values: CONTEXT_LINE_MODE_VALUES,
-		default: "embedded",
-	},
-
-	"statusLine.sessionAccent": {
-		type: "boolean",
-		default: true,
-	},
-
-	"statusLine.transparent": {
-		type: "boolean",
-		default: false,
-	},
-	"statusLine.compactThinkingLevel": {
-		type: "boolean",
-		default: false,
-	},
 	"tools.artifactSpillThreshold": {
 		type: "number",
 		default: 50,
@@ -382,23 +289,7 @@ export const SETTINGS_SCHEMA = {
 		default: 500,
 	},
 
-	"statusLine.showHookStatus": {
-		type: "boolean",
-		default: true,
-	},
-
-	"statusLine.leftSegments": { type: "array", default: [] as StatusLineSegmentId[] },
-
-	"statusLine.rightSegments": { type: "array", default: [] as StatusLineSegmentId[] },
-
-	"statusLine.segmentOptions": { type: "record", default: {} as Record<string, unknown> },
-
-	// Images and terminal
-	"terminal.showImages": {
-		type: "boolean",
-		default: true,
-	},
-
+	// Images
 	"images.autoResize": {
 		type: "boolean",
 		default: true,
@@ -465,100 +356,9 @@ export const SETTINGS_SCHEMA = {
 		default: 8787,
 	},
 
-	"tui.maxInlineImageColumns": {
-		type: "number",
-		default: 100,
-	},
-
-	"tui.maxInlineImageRows": {
-		type: "number",
-		default: 20,
-	},
-
-	"tui.maxInlineImages": {
-		type: "number",
-		default: 8,
-	},
-	"tui.resizeScrollback": {
-		type: "enum",
-		values: ["append", "rebuild", "preserve"] as const,
-		default: "rebuild",
-	},
-
-	"terminal.showProgress": {
-		type: "boolean",
-		default: false,
-	},
-
-	"tui.textSizing": {
-		type: "boolean",
-		default: false,
-	},
-
-	"tui.renderMermaid": {
+	"prompts.renderMermaid": {
 		type: "boolean",
 		default: true,
-	},
-
-	"tui.codexResetFireworks": {
-		type: "boolean",
-		default: false,
-	},
-
-	"tui.titleState": {
-		type: "boolean",
-		default: true,
-	},
-
-	"tui.hyperlinks": {
-		type: "enum",
-		values: ["off", "auto", "always"] as const,
-		default: "auto",
-	},
-	"tui.tight": {
-		type: "boolean",
-		default: false,
-	},
-
-	"display.shimmer": {
-		type: "enum",
-		values: ["classic", "kitt", "disabled"] as const,
-		default: "classic",
-	},
-
-	"display.smoothStreaming": {
-		type: "boolean",
-		default: true,
-	},
-
-	"display.hideToolActivity": {
-		type: "boolean",
-		default: false,
-	},
-
-	"display.showTokenUsage": {
-		type: "boolean",
-		default: false,
-	},
-
-	"display.cacheMissMarker": {
-		type: "boolean",
-		default: false,
-	},
-
-	"display.collapseCompacted": {
-		type: "boolean",
-		default: true,
-	},
-
-	showHardwareCursor: {
-		type: "boolean",
-		default: true,
-	},
-
-	"tui.imeSafeCursor": {
-		type: "boolean",
-		default: false,
 	},
 
 	// ────────────────────────────────────────────────────────────────────────
@@ -570,15 +370,6 @@ export const SETTINGS_SCHEMA = {
 		type: "enum",
 		values: [...THINKING_EFFORTS, AUTO_THINKING],
 		default: "high",
-	},
-
-	hideThinkingBlock: {
-		type: "boolean",
-		default: false,
-	},
-	proseOnlyThinking: {
-		type: "boolean",
-		default: true,
 	},
 
 	omitThinking: {
@@ -789,78 +580,10 @@ export const SETTINGS_SCHEMA = {
 		default: "prompt",
 	},
 
-	// Input and startup
-	doubleEscapeAction: {
-		type: "enum",
-		values: ["branch", "tree", "none"] as const,
-		default: "tree",
-	},
-
-	treeFilterMode: {
-		type: "enum",
-		values: ["default", "no-tools", "user-only", "labeled-only", "all"] as const,
-		default: "default",
-	},
-
-	autocompleteMaxVisible: {
-		type: "number",
-		default: 10,
-	},
-
-	"spelling.typoDetection": {
-		type: "boolean",
-		default: true,
-	},
-
-	"spelling.autocomplete": {
-		type: "boolean",
-		default: true,
-	},
-
-	"spelling.autocorrect": {
-		type: "boolean",
-		default: false,
-	},
-
-	emojiAutocomplete: {
-		type: "boolean",
-		default: true,
-	},
-
-	"paste.largeMenuThreshold": {
-		type: "number",
-		default: 100,
-	},
-
+	// Startup
 	"startup.quiet": {
 		type: "boolean",
 		default: false,
-	},
-
-	"startup.showSplash": {
-		type: "boolean",
-		default: false,
-	},
-
-	"startup.setupWizard": {
-		type: "boolean",
-		default: true,
-	},
-
-	"startup.checkUpdate": {
-		type: "boolean",
-		default: true,
-	},
-	"update.channel": {
-		type: "enum",
-		values: ["stable", "canary"] as const,
-		default: "stable",
-	},
-
-	"marketplace.autoUpdate": {
-		type: "enum",
-		values: ["off", "notify", "auto"] as const,
-		default: "notify",
 	},
 
 	"startup.changelogMode": {
@@ -889,28 +612,9 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 	},
 
-	// Notifications
-	"completion.notify": {
-		type: "enum",
-		values: ["on", "off"] as const,
-		default: "on",
-	},
-
-	"error.notify": {
-		type: "enum",
-		values: ["on", "off"] as const,
-		default: "off",
-	},
-
 	"ask.timeout": {
 		type: "number",
 		default: 0,
-	},
-
-	"ask.notify": {
-		type: "enum",
-		values: ["on", "off"] as const,
-		default: "on",
 	},
 
 	"recap.enabled": {
@@ -2504,15 +2208,6 @@ export function getEnumValues(path: SettingPath): readonly string[] | undefined 
 // Derived Types from Schema
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Status line preset - derived from schema */
-export type StatusLinePreset = SettingValue<"statusLine.preset">;
-
-/** Status line separator style - derived from schema */
-export type StatusLineSeparatorStyle = SettingValue<"statusLine.separator">;
-
-/** Tree selector filter mode - derived from schema */
-export type TreeFilterMode = SettingValue<"treeFilterMode">;
-
 /** Personality preset - derived from schema */
 export type Personality = SettingValue<"personality">;
 
@@ -2634,15 +2329,6 @@ export interface ExaSettings {
 	searchDelayMs: number;
 }
 
-export interface StatusLineSettings {
-	preset: StatusLinePreset;
-	separator: StatusLineSeparatorStyle;
-	showHookStatus: boolean;
-	leftSegments: StatusLineSegmentId[];
-	rightSegments: StatusLineSegmentId[];
-	segmentOptions: Record<string, unknown>;
-}
-
 export interface ThinkingBudgetsSettings {
 	minimal: number;
 	low: number;
@@ -2707,7 +2393,6 @@ export interface GroupTypeMap {
 	commit: CommitSettings;
 	ttsr: TtsrSettings;
 	exa: ExaSettings;
-	statusLine: StatusLineSettings;
 	thinkingBudgets: ThinkingBudgetsSettings;
 	stt: SttSettings;
 	modelRoles: Record<string, string>;

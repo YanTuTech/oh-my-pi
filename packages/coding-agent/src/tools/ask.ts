@@ -860,8 +860,6 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		const settingsTimeout = timeoutSeconds === 0 ? null : timeoutSeconds * 1000;
 		const timeout = planModeEnabled ? null : settingsTimeout;
 
-		// Send notification if waiting and not suppressed
-
 		if (params.questions.length === 0) {
 			return {
 				content: [{ type: "text" as const, text: "Error: questions must not be empty" }],

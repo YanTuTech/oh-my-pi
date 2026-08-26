@@ -13,7 +13,6 @@ This document describes how `crates/pi-natives` schedules native work and how ca
 - `crates/pi-natives/src/shell.rs`
 - `crates/pi-natives/src/pty.rs`
 - `crates/pi-natives/src/html.rs`
-- `crates/pi-natives/src/sixel.rs`
 - `crates/pi-natives/src/clipboard.rs`
 - `crates/pi-natives/src/text.rs`
 - `crates/pi-natives/src/ps.rs`
@@ -87,10 +86,9 @@ Behavior:
 | `Process#waitForExit(options?)`                               | `Process::wait_for_exit`    | `task::future(env, "process.wait_for_exit", ...)`              | optional signal is bridged through `CancelToken`; `timeoutMs` is the wait operation's typed `false` timeout                          |
 | `PtySession#start(...)` / `startArgv(...)`                    | PTY methods                 | `task::future(env, "pty.start", ...)` + inner `spawn_blocking` | `CancelToken` checked in sync PTY loop via `heartbeat()`                                                                             |
 | `htmlToMarkdown(html, options?)`                              | `html_to_markdown`          | `task::blocking("html_to_markdown", (), ...)`                  | none (`()` token)                                                                                                                    |
-| `encodeSixel(...)`                                            | `encode_sixel`              | synchronous native function                                    | none                                                                                                                                 |
 | `readImageFromClipboard()`                                    | `read_image_from_clipboard` | `task::blocking("clipboard.read_image", (), ...)`              | none (`()` token)                                                                                                                    |
 
-`text.rs`, `tokens.rs`, `keys.rs`, most synchronous `ps.rs` functions, SIXEL encoding, and synchronous utility exports do not use `task::blocking`/`task::future` cancellation. The async `Process.terminate()` and `Process.waitForExit()` methods do.
+`text.rs`, `tokens.rs`, most synchronous `ps.rs` functions, and synchronous utility exports do not use `task::blocking`/`task::future` cancellation. The async `Process.terminate()` and `Process.waitForExit()` methods do.
 
 ## Cancellation lifecycle and state transitions
 

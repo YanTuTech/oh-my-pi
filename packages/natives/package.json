@@ -1,7 +1,7 @@
 {
   "name": "@oh-my-pi/pi-natives",
   "version": "18.0.4",
-  "description": "Native Rust bindings for PDF conversion, audio, WebRTC, grep, clipboard, image processing, syntax highlighting, PTY, and shell operations via N-API",
+  "description": "Native Rust bindings for PDF conversion, audio, WebRTC, grep, clipboard, image processing, PTY, and shell operations via N-API",
   "type": "module",
   "homepage": "https://omp.sh",
   "author": "Stencil Labs, Inc.",
@@ -23,8 +23,7 @@
     "clipboard",
     "image",
     "pty",
-    "shell",
-    "syntax-highlighting"
+    "shell"
   ],
   "main": "./native/index.js",
   "types": "./native/index.d.ts",

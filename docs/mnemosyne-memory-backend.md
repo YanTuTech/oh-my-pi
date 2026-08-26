@@ -174,7 +174,7 @@ new Mnemopi({
 
 ## Shutdown and durability
 
-Normal interactive and print-mode exit uses a deliberately lighter path than `/memory enqueue`:
+Normal host-driven session disposal uses a deliberately lighter path than `/memory enqueue`:
 
 1. The primary state retains the current transcript with new fact extraction disabled.
 2. It flushes extractions that were already in flight, but does not run per-session sleep or full cross-session promotion.

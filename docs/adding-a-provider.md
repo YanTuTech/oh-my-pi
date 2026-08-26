@@ -9,7 +9,7 @@ A provider is described in two halves:
   `DEFAULT_MODEL_PER_PROVIDER` are derived from this table.
 - **Auth half** (`packages/ai`): one declarative `ProviderDefinition` in the
   registry carrying env-key fallbacks and login/refresh flows. The
-  `OAuthProvider` union, the env-key map, the `/login` provider list, the
+  `OAuthProvider` union, the env-key map, the host authentication provider list, the
   `refreshOAuthToken` / `AuthStorage.login` dispatch, and the coding-agent
   callback maps are derived from the registry.
 
@@ -37,7 +37,7 @@ For the common case, a provider is **one catalog entry + one def file + one regi
    entry's `envVars`; set `envKeys` only for computed resolvers (Foundry/ADC/
    Bedrock-style probes).
 3. **Add it to the `ALL` array** in `packages/ai/src/registry/registry.ts`
-   (one import + one array entry). `ALL` order is the `/login` list order for
+   (one import + one array entry). `ALL` order is the host authentication list order for
    loginable providers.
 
 That is the full change for:
@@ -76,7 +76,7 @@ from the catalog table and `OAuthProvider` from the registry.
 
 | Field                   | Effect                                                                                                                                                                                                    |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`, `name`            | Required. `name` shows in the `/login` list when the definition has a visible login flow.                                                                                                                 |
+| `id`, `name`            | Required. `name` is exposed to hosts when the definition has a visible authentication flow.                                                                                                              |
 | `available`             | Optional login-list availability flag.                                                                                                                                                                    |
 | `showInLoginList`       | Set to `false` to keep a provider with a `login` flow out of the interactive list.                                                                                                                        |
 | `envKeys`               | Computed env fallback for `getEnvApiKey`, overriding the catalog entry's `envVars`: a var name string or a `() => string \| undefined` resolver. Omit when `envVars` covers it.                           |
@@ -84,7 +84,7 @@ from the catalog table and `OAuthProvider` from the registry.
 | `prepareRequest`        | Provider-owned request shaping before generic API dispatch. Returns the model and stream options to dispatch.                                                                                             |
 | `mapSimpleOptions`      | Projects the generic simple-stream option bag into provider-owned options.                                                                                                                                |
 | `prepareModelDiscovery` | Provider-owned authentication or endpoint setup for runtime model discovery.                                                                                                                              |
-| `login`                 | Interactive login. Present ⇒ member of `OAuthProvider`, dispatchable via `AuthStorage.login`, and shown in `/login` unless `showInLoginList` is false. Returns an API-key `string` or `OAuthCredentials`. |
+| `login`                 | Host-driven authentication flow. Present ⇒ member of `OAuthProvider`, dispatchable via `AuthStorage.login`, and host-visible unless `showInLoginList` is false. Returns an API-key `string` or `OAuthCredentials`. |
 | `refreshToken`          | OAuth refresher; omit for static-token providers (the dispatch returns credentials unchanged).                                                                                                            |
 | `getApiKey`             | Converts stored OAuth credentials into the API-key/token string used by the transport.                                                                                                                    |
 | `storeCredentialsAs`    | Store credentials under a different provider id (e.g. `openai-codex-device` ⇒ `openai-codex`).                                                                                                            |

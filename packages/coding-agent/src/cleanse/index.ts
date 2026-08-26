@@ -1,8 +1,8 @@
 import { getProjectDir } from "@oh-my-pi/pi-utils";
+import type { AgentProgress } from "../task/types";
 import { shortenPath } from "../tools/render-utils";
 import { type CleanseAgentHooks, type CleanseAgentRuntime, createCleanseAgentRuntime } from "./agent";
 import { groupDiagnosticsByFile } from "./balance";
-import type { CleanseStatusBoard } from "./board";
 import {
 	buildCustomCleanseSuite,
 	type CleanseCheckerDescriptor,
@@ -11,23 +11,44 @@ import {
 	discoverCleanseDiagnosticSuite,
 } from "./checkers";
 import { runCleanseLoop } from "./loop";
-import type { CleanseCommandResult, CleanseDiagnosticReport, CleanseLoopResult, CleanseTargetChoice } from "./types";
+import type {
+	CleanseAgentOutcome,
+	CleanseAssignment,
+	CleanseCheckResult,
+	CleanseCommandResult,
+	CleanseDiagnosticReport,
+	CleanseLoopResult,
+	CleanseTargetChoice,
+} from "./types";
 
 const DEFAULT_MODEL = "@smol";
 const DISPLAY_FILE_LIMIT = 50;
 
-/** User-facing options for `omp cleanse`. */
+/** Options for a host-driven cleanse run. */
 export interface CleanseCommandOptions {
 	maxAgents?: number;
 	model?: string;
 	includeTests?: boolean;
 	/** Free-form description handed to a discovery agent instead of built-in checker discovery. */
 	request?: string;
-	/** Run every discovered checker without the interactive picker. */
+	/** Run every discovered checker without asking the host to choose. */
 	all?: boolean;
 }
 
-/** Rendering and prompting seam for one cleanse run; satisfied by the CLI streams and the TUI overlay. */
+/** Host-owned progress sink for one headless cleanse run. */
+export interface CleanseStatusBoard {
+	log(text: string): void;
+	phase(text: string | undefined): void;
+	checkerStarted(checker: CleanseCheckerDescriptor): void;
+	checkerFinished(check: CleanseCheckResult, durationMs: number): void;
+	repairFinished(): void;
+	agentStarted(name: string, assignment: CleanseAssignment): void;
+	agentProgress(name: string, progress: AgentProgress): void;
+	agentFinished(outcome: CleanseAgentOutcome, assignment: CleanseAssignment): void;
+	close(): void;
+}
+
+/** Progress and interaction seam supplied by the embedding host. */
 export interface CleanseRunUi {
 	board: CleanseStatusBoard;
 	/** Permanent user-facing summary line. */
@@ -43,8 +64,8 @@ export interface CleanseRunUi {
 /**
  * Detect project diagnostics, dispatch one bounded repair batch, and verify it.
  *
- * Cancellation flows exclusively through `signal`; the caller owns signal
- * sources (SIGINT for the CLI, Esc for the interactive overlay).
+ * Cancellation flows exclusively through `signal`; the embedding host owns
+ * the signal source.
  */
 export async function runCleanse(
 	options: CleanseCommandOptions,

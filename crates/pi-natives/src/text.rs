@@ -8,10 +8,7 @@
 //! - Ellipsis decoded lazily
 //! - truncateToWidth returns the original `JsString` when possible
 
-use std::{
-	cell::RefCell,
-	sync::atomic::{AtomicU8, Ordering},
-};
+use std::cell::RefCell;
 
 use napi::{JsString, bindgen_prelude::*};
 use napi_derive::napi;
@@ -377,8 +374,8 @@ fn ansi_seq_len_u16(data: &[u16], pos: usize) -> Option<usize> {
 		},
 		0x50 | 0x58 | 0x5e | 0x5f => {
 			// 'P' DCS, 'X' SOS, '^' PM, '_' APC — string sequences terminated by ST
-			// (`ESC \`) or, as most terminals also accept (like OSC), BEL. The TUI's
-			// cursor marker is a BEL-terminated APC, so BEL must close these too.
+			// (`ESC \`) or, as most terminals also accept (like OSC), BEL. Accepting
+			// both terminators keeps streamed process output width-safe.
 			for (i, &b) in data[pos + 2..].iter().enumerate() {
 				if b == 0x07 {
 					return Some(i + 3);
@@ -592,22 +589,6 @@ const fn ascii_cell_width_u16(u: u16, tab_width: usize) -> usize {
 
 const HANGUL_COMPAT_JAMO_NARROW_WIDTH: usize = 1;
 
-/// Runtime override for Hangul Compatibility Jamo (U+3131..=U+318E) cell width.
-///   0 = unset → platform default (macOS: narrow 1 cell; otherwise UAX#11)
-///   1 = force narrow (1 cell)
-///   2 = force wide (2 cells)
-///   3 = force Unicode width (no correction)
-/// The actual width is decided by the *client* terminal, not the host OS, so it
-/// is resolved at runtime from the terminal identity (see the host integration
-/// in `packages/utils/src/terminal-host.ts`) and pushed here through
-/// `set_hangul_compat_jamo_width_override`.
-static HANGUL_COMPAT_JAMO_WIDTH_OVERRIDE: AtomicU8 = AtomicU8::new(0);
-
-#[napi]
-pub fn set_hangul_compat_jamo_width_override(value: u8) {
-	HANGUL_COMPAT_JAMO_WIDTH_OVERRIDE.store(value, Ordering::Relaxed);
-}
-
 #[inline]
 const fn is_hangul_compat_jamo(c: char) -> bool {
 	let cp = c as u32;
@@ -615,21 +596,13 @@ const fn is_hangul_compat_jamo(c: char) -> bool {
 }
 
 /// Effective target cell width for Compatibility Jamo, or `None` to follow the
-/// Unicode width (no correction). Reads the runtime override, falling back to
-/// the compile-time platform default when unset.
+/// Unicode width (no correction).
 #[inline]
-fn hangul_compat_jamo_target_width() -> Option<usize> {
-	match HANGUL_COMPAT_JAMO_WIDTH_OVERRIDE.load(Ordering::Relaxed) {
-		1 => Some(1),
-		2 => Some(2),
-		3 => None,
-		_ => {
-			if cfg!(target_os = "macos") {
-				Some(HANGUL_COMPAT_JAMO_NARROW_WIDTH)
-			} else {
-				None
-			}
-		},
+const fn hangul_compat_jamo_target_width() -> Option<usize> {
+	if cfg!(target_os = "macos") {
+		Some(HANGUL_COMPAT_JAMO_NARROW_WIDTH)
+	} else {
+		None
 	}
 }
 
@@ -659,11 +632,9 @@ fn apply_hangul_compat_jamo_delta(width: usize, c: char) -> usize {
 
 #[inline]
 fn char_width_corrected(c: char) -> usize {
-	// Hangul Compatibility Jamo U+3131..=U+318E render as 1 cell on some
-	// terminals (Terminal.app, iTerm2) but follow UAX#11 at 2 cells on others
-	// (Ghostty, most Linux terminals). The width is resolved at runtime from the
-	// terminal identity and applied through the override; absent an override we
-	// fall back to the compile-time platform default.
+	// Hangul Compatibility Jamo U+3131..=U+318E render as 1 cell under the macOS
+	// convention while other platforms follow their UAX#11 width. This static
+	// platform correction keeps output normalization deterministic for hosts.
 	if is_hangul_compat_jamo(c)
 		&& let Some(target) = hangul_compat_jamo_target_width()
 	{
@@ -2069,9 +2040,8 @@ mod tests {
 
 	#[test]
 	fn test_wrap_text_with_ansi_bel_terminated_apc_is_zero_width() {
-		// The TUI cursor marker is a BEL-terminated APC. A prior bug left it
-		// unrecognized, so it was counted as visible width and `break_long_word`
-		// spun forever on the ESC. The APC must measure zero width: a line whose
+		// A BEL-terminated APC previously counted as visible width and made
+		// `break_long_word` spin forever on ESC. The APC must measure zero width: a line whose
 		// visible content fits the target stays on a single row.
 		let data = to_u16("\x1b_pi:c\x07root-overflowx1界🙂한");
 		let lines = wrap_text_with_ansi_impl(&data, 24, DEFAULT_TAB_WIDTH);

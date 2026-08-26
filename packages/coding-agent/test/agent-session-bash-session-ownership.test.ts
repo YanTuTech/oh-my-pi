@@ -314,7 +314,6 @@ describe("AgentSession bash session ownership", () => {
 
 			const oldSession = await SessionManager.open(oldSessionFile, sessionDir, undefined, {
 				initialCwd: tempDir.path(),
-				suppressBreadcrumb: true,
 			});
 			additionalManagers.push(oldSession);
 			const oldMessages = oldSession.getBranch().flatMap(entry => (entry.type === "message" ? [entry.message] : []));
@@ -354,7 +353,6 @@ describe("AgentSession bash session ownership", () => {
 		expect(artifactId).toBeDefined();
 		const oldSession = await SessionManager.open(oldSessionFile, sessionDir, undefined, {
 			initialCwd: tempDir.path(),
-			suppressBreadcrumb: true,
 		});
 		additionalManagers.push(oldSession);
 		const artifactPath = await oldSession.getArtifactPath(artifactId!);

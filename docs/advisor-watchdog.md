@@ -43,16 +43,7 @@ Model selectors use normal role/model resolution, including provider-prefixed id
 
 `tier.advisor` controls service tier for all advisors. It defaults to `none` (standard processing); `inherit` follows the primary's live per-family tier, including `/fast` changes. Concrete values (`auto`, `default`, `flex`, `scale`, `priority`) are applied only when the advisor model's provider family supports them.
 
-### Headless runs
-
-Use `--advisor` to enable the advisor for one print-mode process without
-persisting `advisor.enabled`:
-
-```sh
-omp -p --advisor "Review this task."
-```
-
-While a primary prompt is running, advisor concerns and blockers continue to steer that live turn. After the final prompt settles, print mode preserves late advisor notes without starting hidden primary turns, then waits up to ten minutes for final reviews before disposing the session. Error exits use a 30-second drain budget so failed automation can terminate. If either deadline expires, OMP logs the reviews that disposal will abandon; completed reviews retain their transcript and token/cost usage.
+While a primary prompt is running, advisor concerns and blockers continue to steer that live turn. Embedding hosts decide when to dispose the session; disposal drains bounded background work and preserves completed advisor reviews, transcript entries, and token/cost usage.
 
 Slash commands:
 
@@ -147,7 +138,7 @@ Each advisor has its own `AdvisorEmissionGuard` (`src/advisor/emission-guard.ts`
 
 Guard-level suppression is invisible to the model because `AdviseTool` has already returned `Recorded.`. The tool's earlier equal-or-lower-severity duplicate check is intentionally visible as `Duplicate advice ignored.`; in-progress non-blockers return `Recorded.` without routing.
 
-The guard's full state — dedupe history and per-update gate — clears on every advisor reset (compaction, session switch, `/new`), so a re-primed reviewer can re-raise issues it already raised against the rewritten transcript.
+The guard's full state — dedupe history and per-update gate — clears on every advisor reset (compaction, session switch, or a new host session), so a re-primed reviewer can re-raise issues it already raised against the rewritten transcript.
 
 ## Bounded catch-up with `advisor.syncBacklog`
 
@@ -296,7 +287,7 @@ Fields:
 Subagents run unadvised by default; advisors are opted in **per agent** instead of via a blanket toggle:
 
 - Agent definition frontmatter `advisor`: `true` advises spawned sessions of that agent with the model resolved for the `advisor` role; a string (e.g. `advisor: "deepseek/deepseek-v4-flash"` or `advisor: "@smol:high"`) sets an explicit advisor model pattern with an optional `:level` thinking suffix.
-- The `task.agentAdvisor` settings record (agent name → `"on"` / `"off"` / model pattern) overrides the frontmatter, and is configured per agent from the `/agents` hub: Enter on an agent opens its property strip; the advisor strip offers on/off, a model-browser pick, or a raw pattern.
+- The `task.agentAdvisor` settings record (agent name → `"on"` / `"off"` / model pattern) overrides the frontmatter and is configured per agent through host settings.
 
 The legacy `advisor.subagents: true` setting migrates to `task.agentAdvisor: { task: "on" }` — the bundled generic `task` agent keeps its advisor, other agents start unadvised.
 
@@ -326,9 +317,9 @@ Paths derive from the owning session file (not the shared artifacts root), so ea
 
 Why a file:
 
-- **Usage attribution.** `omp stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
+- **Usage attribution.** `@oh-my-pi/omp-stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
 - **Observability.** Session listing APIs discover legacy and named `__advisor*.jsonl` files and expose each as a read-only `advisor`-kind transcript under its owning session for host projection.
 
-The file follows session switches: on `/new`, resume/switch, and branch the recorder reopens at the new session's path on the next advisor turn; before a `/drop` deletes the old artifacts dir the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
+The file follows host session creation, resume/switch, and branch operations: the recorder reopens at the new session's path on the next advisor turn; before a host drop operation deletes the old artifacts directory the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
 
 The advisor is never a peer. The `advisor`-kind registry ref is excluded from the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions. It cannot be messaged, revived, killed, or addressed through collaboration host actions, regardless of what tools it has been granted.

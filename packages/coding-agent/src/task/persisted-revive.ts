@@ -103,9 +103,7 @@ export function createPersistedSubagentReviverFactory(
 		return async expectedRef => {
 			// Re-open fresh on every revive: park closes the writer, so this takes
 			// the single-writer lock cleanly and restores the full message history.
-			const reopened = await SessionManager.open(sessionFile, undefined, undefined, {
-				suppressBreadcrumb: true,
-			});
+			const reopened = await SessionManager.open(sessionFile);
 			const artifactManager = ctx.session.sessionManager.getArtifactManager();
 			if (artifactManager) reopened.adoptArtifactManager(artifactManager);
 			// A restricted persisted contract must not consult process-global MCP

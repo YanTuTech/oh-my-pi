@@ -22,15 +22,12 @@ export const AudioPlayback = nativeBindings.AudioPlayback;
 export const DesktopSession = adaptDesktopSession(nativeBindings.DesktopSession);
 export const DiffStream = nativeBindings.DiffStream;
 export const FileLock = nativeBindings.FileLock;
-export const HighlightStream = nativeBindings.HighlightStream;
 export const LiveWebRtcPeer = nativeBindings.LiveWebRtcPeer;
-export const MacAppearanceObserver = nativeBindings.MacAppearanceObserver;
 export const MacOSPowerAssertion = nativeBindings.MacOSPowerAssertion;
 export const Process = nativeBindings.Process;
 export const PtySession = nativeBindings.PtySession;
 export const Shell = nativeBindings.Shell;
 export const StrictWorkspaceMentionReader = nativeBindings.StrictWorkspaceMentionReader;
-export const TtyWriter = nativeBindings.TtyWriter;
 
 // functions
 export const __ompInstallTokioRuntime = nativeBindings.__ompInstallTokioRuntime;
@@ -42,22 +39,18 @@ export const blockRangeAt = nativeBindings.blockRangeAt;
 export const copyToClipboard = nativeBindings.copyToClipboard;
 export const cosineSimilarityPairs = nativeBindings.cosineSimilarityPairs;
 export const countTokens = nativeBindings.countTokens;
-export const detectMacOSAppearance = nativeBindings.detectMacOSAppearance;
 export const deviceCheckGenerateToken = nativeBindings.deviceCheckGenerateToken;
 export const diffLineRuns = nativeBindings.diffLineRuns;
 export const diffLines = nativeBindings.diffLines;
 export const diffWords = nativeBindings.diffWords;
 export const enclosingBlockBoundaries = nativeBindings.enclosingBlockBoundaries;
-export const encodeSixel = nativeBindings.encodeSixel;
 export const executeShell = nativeBindings.executeShell;
 export const extractSegments = nativeBindings.extractSegments;
 export const fuzzyFind = nativeBindings.fuzzyFind;
-export const getSupportedLanguages = nativeBindings.getSupportedLanguages;
 export const getWorkProfile = nativeBindings.getWorkProfile;
 export const glob = nativeBindings.glob;
 export const grep = nativeBindings.grep;
 export const hasMatch = nativeBindings.hasMatch;
-export const highlightCode = nativeBindings.highlightCode;
 export const htmlToMarkdown = nativeBindings.htmlToMarkdown;
 export const invalidateFsScanCache = nativeBindings.invalidateFsScanCache;
 export const isoBackend = nativeBindings.isoBackend;
@@ -68,34 +61,21 @@ export const isoResolve = nativeBindings.isoResolve;
 export const isoStart = nativeBindings.isoStart;
 export const isoStop = nativeBindings.isoStop;
 export const listWorkspace = nativeBindings.listWorkspace;
-export const macOSAutocorrectWord = nativeBindings.macOSAutocorrectWord;
-export const macOSCheckSpelling = nativeBindings.macOSCheckSpelling;
-export const macOSCompleteWord = nativeBindings.macOSCompleteWord;
-export const macOSSpellCheckerAvailable = nativeBindings.macOSSpellCheckerAvailable;
-export const macOSSpellingGuesses = nativeBindings.macOSSpellingGuesses;
-export const matchesKey = nativeBindings.matchesKey;
-export const matchesKittySequence = nativeBindings.matchesKittySequence;
-export const matchesLegacySequence = nativeBindings.matchesLegacySequence;
 export const mmrRerankIndices = nativeBindings.mmrRerankIndices;
 export const nodeChainAt = nativeBindings.nodeChainAt;
-export const parseKey = nativeBindings.parseKey;
-export const parseKittySequence = nativeBindings.parseKittySequence;
 export const pdfToMarkdown = nativeBindings.pdfToMarkdown;
 export const rasterizeSvg = nativeBindings.rasterizeSvg;
 export const readImageFromClipboard = nativeBindings.readImageFromClipboard;
 export const readWorkspaceMentionRootIdentity = nativeBindings.readWorkspaceMentionRootIdentity;
 export const renderSnapcompactPng = nativeBindings.renderSnapcompactPng;
 export const search = nativeBindings.search;
-export const setHangulCompatJamoWidthOverride = nativeBindings.setHangulCompatJamoWidthOverride;
 export const sliceWithWidth = nativeBindings.sliceWithWidth;
 export const snapcompactSupportedChars = nativeBindings.snapcompactSupportedChars;
 export const structuredPatchHunks = nativeBindings.structuredPatchHunks;
 export const summarizeCode = nativeBindings.summarizeCode;
-export const supportsLanguage = nativeBindings.supportsLanguage;
 export const truncateToWidth = nativeBindings.truncateToWidth;
 export const vectorIndexTopK = nativeBindings.vectorIndexTopK;
 export const visibleWidth = nativeBindings.visibleWidth;
-export const warmHighlighter = nativeBindings.warmHighlighter;
 export const wrapTextWithAnsi = nativeBindings.wrapTextWithAnsi;
 
 // string/numeric enums (napi-rs string_enum produces TS-only const enum)
@@ -152,15 +132,6 @@ export const IsoChangeKind = {
 	Added: 0,
 	Modified: 1,
 	Removed: 2,
-};
-export const KeyEventType = {
-	Press: 1,
-	Repeat: 2,
-	Release: 3,
-};
-export const MacOSAppearance = {
-	Dark: "dark",
-	Light: "light",
 };
 export const ProcessStatus = {
 	Running: "running",

@@ -19,7 +19,6 @@ Terminology follows `docs/natives-architecture.md`:
 - `crates/pi-walker/src/cache.rs`
 - `crates/pi-natives/src/ast.rs`
 - `crates/pi-natives/src/text.rs`
-- `crates/pi-natives/src/highlight.rs`
 - `crates/pi-natives/src/tokens.rs`
 
 ## JS API ↔ Rust export mapping
@@ -40,10 +39,6 @@ Terminology follows `docs/natives-architecture.md`:
 | `sliceWithWidth(line, startCol, length, strict, tabWidth)`                      | `sliceWithWidth`                                 | `text.rs`      |
 | `extractSegments(line, beforeEnd, afterStart, afterLen, strictAfter, tabWidth)` | `extractSegments`                                | `text.rs`      |
 | `visibleWidth(text, tabWidth)`                                                  | `visibleWidth`                                   | `text.rs`      |
-| `setHangulCompatJamoWidthOverride(value)`                                       | `setHangulCompatJamoWidthOverride`               | `text.rs`      |
-| `highlightCode(code, lang, colors)`                                             | `highlightCode`                                  | `highlight.rs` |
-| `supportsLanguage(lang)`                                                        | `supportsLanguage`                               | `highlight.rs` |
-| `getSupportedLanguages()`                                                       | `getSupportedLanguages`                          | `highlight.rs` |
 | `countTokens(input, encoding?)`                                                 | `countTokens`                                    | `tokens.rs`    |
 
 ## Pipeline overview by subsystem
@@ -209,30 +204,13 @@ These are pure, in-memory utilities.
 - `truncateToWidth`: visible-cell truncation with ellipsis policy (`Unicode`, `Ascii`, `Omit`), optional right padding.
 - `sliceWithWidth`: column slicing with optional strict width enforcement.
 - `extractSegments`: extracts before/after segments around an overlay while restoring ANSI state for the `after` segment.
-- `setHangulCompatJamoWidthOverride(value)` controls U+3131–U+318E width correction for client-terminal compatibility: `0` uses the platform fallback, `1` forces one cell, `2` forces two, and `3` follows Unicode width.
 - `visibleWidth`: counts visible terminal cells using caller-supplied tab width.
 
 ### Failure behavior
 
 Text functions generally return deterministic transformed output; errors are limited to N-API argument/string conversion boundaries.
 
-## 6) Syntax highlighting (`highlight`)
-
-`highlight.rs` is pure transformation; it does not use the filesystem scan cache.
-
-### Flow
-
-1. Caller passes `code`, optional `lang`, and ANSI color palette.
-2. Rust resolves syntax by token/name lookup, extension lookup, alias table fallback, then plain-text fallback.
-3. Each line is parsed with syntect `ParseState` and scope stack.
-4. Scopes map to semantic color categories and ANSI color codes are injected/reset.
-
-### Failure behavior
-
-- Per-line parse failure does not fail the call: that line is appended unhighlighted and processing continues.
-- Unknown/unsupported language falls back to plain text syntax.
-
-## 7) Token counting (`tokens`)
+## 6) Token counting (`tokens`)
 
 `countTokens(input, encoding?)` is an in-memory utility.
 
@@ -247,7 +225,6 @@ Text functions generally return deterministic transformed output; errors are lim
 | ---------------------------- | ----------------- | ------------------------- | -------------------------------------------------------------------- |
 | `search` / `hasMatch`        | No                | No                        | regex on provided bytes/string only                                  |
 | `text` module functions      | No                | No                        | ANSI/width utilities only                                            |
-| `highlight` module functions | No                | No                        | syntax + ANSI coloring only                                          |
 | `countTokens`                | No                | No                        | tokenization only                                                    |
 | `astMatch`                   | No                | No                        | in-memory syntax-aware match (no disk)                               |
 | `astGrep` / `astEdit`        | Yes               | Yes (directory discovery) | directory paths use cached traversal; a direct file path bypasses it |

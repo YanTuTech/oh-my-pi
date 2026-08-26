@@ -43,12 +43,12 @@ For Claude Code, Codex, Gemini CLI, Cursor, and Windsurf, the project entry is e
 
 ### Profiles
 
-Named profiles (`omp --profile <name>`, the `--alias` shortcut, or `OMP_PROFILE`/`PI_PROFILE`) isolate user-level MCP config. When a profile is active, the **user** scope resolves to the profile's agent directory instead of the default one:
+Named profiles (`OMP_PROFILE`/`PI_PROFILE`) isolate user-level MCP config. When a profile is active, the **user** scope resolves to the profile's agent directory instead of the default one:
 
 - Default profile: `~/.omp/agent/mcp.json`
 - Profile `<name>`: `~/.omp/profiles/<name>/agent/mcp.json`
 
-Discovery, the `/mcp` commands, and the config writer all follow the active profile, so a profile sees **only** its own user-level servers — never the default profile's `~/.omp/agent/mcp.json`. Add a server to a profile by launching under it (`omp --profile <name>`) and running `/mcp add` → User level, or by editing `~/.omp/profiles/<name>/agent/mcp.json` directly.
+Discovery, the `/mcp` commands, and the config writer all follow the active profile, so a profile sees **only** its own user-level servers — never the default profile's `~/.omp/agent/mcp.json`. Add a server to a profile by starting the host with `OMP_PROFILE=<name>` and executing `/mcp add` through ACP/RPC, or by editing `~/.omp/profiles/<name>/agent/mcp.json` directly.
 
 Project-scoped MCP config (`.omp/mcp.json`) is keyed to the working directory, not the profile, so it applies under every profile. External-tool configs (`.claude/`, `.cursor/`, etc.) are also profile-independent because they belong to those tools rather than to an OMP profile.
 

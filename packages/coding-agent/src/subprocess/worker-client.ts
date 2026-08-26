@@ -107,9 +107,9 @@ export interface WorkerSpawnCommand {
 export const SMOKE_TEST_TIMEOUT_MS = 30_000;
 
 /**
- * Resolve the command used to relaunch the agent CLI into worker mode. In a
- * compiled binary the entry point is the binary itself; otherwise re-enter the
- * declared worker-host entry by absolute path. Workers deliberately spawn
+ * Resolve the command used to re-enter the internal worker host. In a compiled
+ * binary the entry point is the binary itself; otherwise re-enter the declared
+ * worker-host entry by absolute path. Workers deliberately spawn
  * without a pinned cwd there: they share the parent's foreground process
  * group, and terminal cwd heuristics (kitty's new_tab_with_cwd) read the
  * newest process in that group, so anchoring them to the install dir leaks

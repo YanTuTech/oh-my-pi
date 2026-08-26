@@ -3007,7 +3007,6 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 			const sessionManagerPromise = sessionFile
 				? SessionManager.open(sessionFile, undefined, undefined, {
 						initialCwd: effectiveCwd,
-						suppressBreadcrumb: true,
 					})
 				: Promise.resolve(SessionManager.inMemory(effectiveCwd));
 			// Setup below can fail before this promise's consumption boundary.
@@ -3195,9 +3194,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				// (createAgentSession → agent.replaceMessages). Isolated runs are not
 				// resumable (worktree is merged + cleaned) and never get a reviver.
 				reviveSession = async expectedAgentRef => {
-					const reopened = await SessionManager.open(sessionFile, undefined, undefined, {
-						suppressBreadcrumb: true,
-					});
+					const reopened = await SessionManager.open(sessionFile);
 					if (options.parentArtifactManager) {
 						reopened.adoptArtifactManager(options.parentArtifactManager);
 					}

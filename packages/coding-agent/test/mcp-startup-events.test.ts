@@ -7,17 +7,9 @@ import {
 	MCP_CONNECTION_STATUS_EVENT_CHANNEL,
 } from "@oh-my-pi/pi-coding-agent/mcp/startup-events";
 
-// Cross-module contract guard.
-//
-// The MCP status lifecycle spans two modules that never import each other:
-//   - sdk.ts emits McpConnectionStatusEvent payloads on MCP_CONNECTION_STATUS_EVENT_CHANNEL.
-//   - interactive-mode.ts subscribes to that channel and renders the aggregate
-//     message via formatMCPConnectionStatusMessage.
-//
-// They agree only through this shared module. Drift in the channel, payload
-// guard, or user-facing status text silently leaves the startup banner stale.
-describe("mcp/startup-events — connection-status cross-module contract", () => {
-	it("pins the wire channel string sdk(emit) and interactive-mode(subscribe) share", () => {
+// SDK emitters and embedding hosts agree through this shared event contract.
+describe("mcp/startup-events — connection-status host contract", () => {
+	it("pins the wire channel string shared by SDK emitters and hosts", () => {
 		expect(MCP_CONNECTION_STATUS_EVENT_CHANNEL).toBe("mcp:connection-status");
 	});
 

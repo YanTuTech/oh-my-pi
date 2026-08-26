@@ -5,7 +5,6 @@ import type { ExtensionContext, ExtensionFactory } from "../extensibility/extens
 import type { AutocompleteItem } from "../extensibility/ui-contract";
 import * as git from "../utils/git";
 import commandResumeTemplate from "./command-resume.md" with { type: "text" };
-import { createDashboardController } from "./dashboard-runtime";
 import { ensureAutoresearchBranch } from "./git";
 import { formatNum } from "./helpers";
 import promptTemplate from "./prompt.md" with { type: "text" };
@@ -32,7 +31,6 @@ const EXPERIMENT_TOOL_NAMES = ["init_experiment", "run_experiment", "log_experim
 
 export const createAutoresearchExtension: ExtensionFactory = api => {
 	const runtimeStore = createRuntimeStore();
-	const dashboard = createDashboardController();
 
 	const getSessionKey = (ctx: ExtensionContext): string => ctx.sessionManager.getSessionId();
 	const getRuntime = (ctx: ExtensionContext): AutoresearchRuntime => runtimeStore.ensure(getSessionKey(ctx));
@@ -89,7 +87,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		runtime.lastRunArtifactDir = runtime.lastRunSummary?.runDirectory ?? null;
 		runtime.lastRunNumber = runtime.lastRunSummary?.runNumber ?? null;
 		runtime.runningExperiment = null;
-		dashboard.updateWidget(ctx, runtime);
 
 		const activeTools = api.getActiveTools();
 		const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
@@ -118,10 +115,10 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		api.appendEntry("autoresearch-control", goal ? { mode, goal } : { mode });
 	};
 
-	api.registerTool(createInitExperimentTool({ dashboard, getRuntime, pi: api }));
-	api.registerTool(createRunExperimentTool({ dashboard, getRuntime, pi: api }));
-	api.registerTool(createLogExperimentTool({ dashboard, getRuntime, pi: api }));
-	api.registerTool(createUpdateNotesTool({ dashboard, getRuntime, pi: api }));
+	api.registerTool(createInitExperimentTool({ getRuntime, pi: api }));
+	api.registerTool(createRunExperimentTool({ getRuntime, pi: api }));
+	api.registerTool(createLogExperimentTool({ getRuntime, pi: api }));
+	api.registerTool(createUpdateNotesTool({ getRuntime, pi: api }));
 
 	api.registerCommand("autoresearch", {
 		description: "Toggle builtin autoresearch mode, or pass off / clear, or a goal message.",
@@ -146,7 +143,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 
 			if (trimmed === "" && runtime.autoresearchMode) {
 				setMode(ctx, false, runtime.goal, "off");
-				dashboard.updateWidget(ctx, runtime);
 				const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
 				await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
 				ctx.ui.notify("Autoresearch mode disabled", "info");
@@ -155,7 +151,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 
 			if (trimmed === "off") {
 				setMode(ctx, false, runtime.goal, "off");
-				dashboard.updateWidget(ctx, runtime);
 				const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
 				await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
 				ctx.ui.notify("Autoresearch mode disabled", "info");
@@ -202,7 +197,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 				runtime.state = buildExperimentState(refreshed, existingStorage.listLoggedRuns(refreshed.id));
 				runtime.goal = refreshed.goal ?? goalArg;
 				setMode(ctx, true, runtime.goal, "on");
-				dashboard.updateWidget(ctx, runtime);
 				await api.setActiveTools([...new Set([...api.getActiveTools(), ...EXPERIMENT_TOOL_NAMES])]);
 				api.sendUserMessage(
 					prompt.render(commandResumeTemplate, {
@@ -215,7 +209,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			}
 
 			setMode(ctx, true, goalArg, "on");
-			dashboard.updateWidget(ctx, runtime);
 			await api.setActiveTools([...new Set([...api.getActiveTools(), ...EXPERIMENT_TOOL_NAMES])]);
 			if (goalArg !== null) {
 				api.sendUserMessage(goalArg);
@@ -230,15 +223,12 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 	api.on("session_branch", (_event, ctx) => rehydrate(ctx));
 	api.on("session_tree", (_event, ctx) => rehydrate(ctx));
 	api.on("session_shutdown", (_event, ctx) => {
-		dashboard.clear(ctx);
 		runtimeStore.clear(getSessionKey(ctx));
 	});
 
 	api.on("agent_end", async (_event, ctx) => {
 		const runtime = getRuntime(ctx);
 		runtime.runningExperiment = null;
-		dashboard.updateWidget(ctx, runtime);
-		dashboard.requestRender();
 		if (!runtime.autoresearchMode) return;
 		if (ctx.hasPendingMessages()) {
 			runtime.autoResumeArmed = false;
@@ -285,7 +275,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			runtime.state = createExperimentState();
 			runtime.lastRunSummary = null;
 			runtime.runningExperiment = null;
-			dashboard.updateWidget(ctx, runtime);
 			const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
 			await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
 			return;
@@ -434,7 +423,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 		runtime.lastRunNumber = null;
 		runtime.lastRunSummary = null;
 		setMode(ctx, false, null, "clear");
-		dashboard.updateWidget(ctx, runtime);
 		const experimentTools = new Set(EXPERIMENT_TOOL_NAMES);
 		await api.setActiveTools(api.getActiveTools().filter(name => !experimentTools.has(name)));
 		ctx.ui.notify("Autoresearch session cleared.", "info");

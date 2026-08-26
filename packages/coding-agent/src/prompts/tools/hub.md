@@ -20,7 +20,7 @@ Background jobs auto-deliver when they finish. You NEVER need to poll; if `jobs`
 
 # Processes
 
-Project-scoped long-running processes shared by every omp instance in the same directory. A long-running service, watcher, debugger, REPL, or process needing later input MUST use `op:"start"`, not `bash`.
+Project-scoped long-running processes shared by every Runtime instance in the same directory. A long-running service, watcher, debugger, REPL, or process needing later input MUST use `op:"start"`, not `bash`.
 
 - **`start`** launches `application` + `args` directly. `cwd` defaults to the session directory; `pty` defaults true.
   - `ready.log` is a JavaScript `RegExp` compiled with the `u` flag; PCRE inline modifiers such as `(?i)` are REJECTED — use `[Rr]eady` instead. `ready.port` is a TCP port. Both supplied? BOTH MUST pass. `ready.timeout` is seconds. Readiness MUST be observed; process creation alone is not readiness.

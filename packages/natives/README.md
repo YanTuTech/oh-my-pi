@@ -6,21 +6,18 @@ Native Rust functionality via N-API.
 
 - **Grep**: Regex-based search powered by ripgrep's engine with native file walking and matching
 - **Find**: Glob-based file/directory discovery with gitignore support (pure TypeScript via `globPaths`)
-- **SIXEL**: Terminal image encoding for SIXEL-capable terminals (decode, resize, encode in one pass)
 - **Audio**: Cross-platform low-latency microphone capture and gapless speaker playback
 - **WebRTC**: Native Opus media, SDP offer/answer negotiation, and data-channel events for live sessions
 - **File locking**: Process-owned cross-process locks with in-memory kernel names on Linux/Windows and `flock(2)` sidecars on other Unix platforms
 - **PDF**: In-memory PDF-to-Markdown extraction with OCR-page classification via `pdf-inspector`
 
 General-purpose image processing (decode/resize/encode for files and buffers)
-lives in [`Bun.Image`](https://bun.com/docs/runtime/image) on the JS side; this
-crate only ships the SIXEL encoder because no built-in equivalent exists for
-that terminal protocol.
+lives in [`Bun.Image`](https://bun.com/docs/runtime/image) on the JS side.
 
 ## Usage
 
 ```typescript
-import { encodeSixel, grep, pdfToMarkdown } from "@oh-my-pi/pi-natives";
+import { grep, pdfToMarkdown } from "@oh-my-pi/pi-natives";
 
 // Grep for a pattern
 const results = await grep({
@@ -36,9 +33,6 @@ const files = await find({
 	path: "/path/to/project",
 	fileType: "file",
 });
-
-// SIXEL encode for a terminal cell box (px)
-const sequence = encodeSixel(pngBytes, widthPx, heightPx);
 
 // Extract PDF text and identify pages that still need OCR
 const pdf = await pdfToMarkdown(pdfBytes);
@@ -63,7 +57,6 @@ platform-specific optional dependency packages:
 ```
 crates/pi-natives/       # Rust source (workspace member)
   src/lib.rs             # N-API exports
-  src/sixel.rs           # SIXEL terminal-image encoding
   Cargo.toml             # Rust dependencies
 native/                  # Core loader files and local/CI native build outputs
   index.js               # Public native export surface

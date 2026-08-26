@@ -35,7 +35,7 @@ Native `extension-module` discovery comes from:
 - User directory: the active agent directory's `extensions/` (default `~/.omp/agent/extensions`)
 - Native legacy/settings JSON entries: `<cwd>/.omp/settings.json#extensions` and the active agent directory's `settings.json#extensions`
 
-The project root is the native provider's `.omp` directory (`SOURCE_PATHS.native.projectDir`), cwd-only; it does not walk ancestors. The user root is the active profile's agent directory via `getAgentDir()`, so under `omp --profile <name>` it becomes `~/.omp/profiles/<name>/agent/extensions` (and it honors `PI_CODING_AGENT_DIR`). See [Profiles](./config-usage.md#profiles).
+The project root is the native provider's `.omp` directory (`SOURCE_PATHS.native.projectDir`), cwd-only; it does not walk ancestors. The user root is the active profile's agent directory via `getAgentDir()`, so under `OMP_PROFILE=<name>` it becomes `~/.omp/profiles/<name>/agent/extensions` (and it honors `PI_CODING_AGENT_DIR`). See [Profiles](./config-usage.md#profiles).
 
 Notes:
 
@@ -62,12 +62,12 @@ After plugin extension entries, configured paths are appended and resolved.
 
 Configured path sources in the main session startup path (`sdk.ts`):
 
-1. CLI-provided paths (`--extension/-e`, and `--hook` is also treated as an extension path)
+1. Explicit host paths (`CreateAgentSessionOptions.additionalExtensionPaths`, including Runtime RPC host `--extension` values)
 2. Merged settings `extensions` array
 
 Settings files:
 
-- User: the active agent directory's `config.yml` (default `~/.omp/agent/config.yml`; with `--profile <name>`, `~/.omp/profiles/<name>/agent/config.yml`; `PI_CODING_AGENT_DIR` can override the agent directory)
+- User: the active agent directory's `config.yml` (default `~/.omp/agent/config.yml`; with `OMP_PROFILE=<name>`, `~/.omp/profiles/<name>/agent/config.yml`; `PI_CODING_AGENT_DIR` can override the agent directory)
 - Project/native settings capability: `<cwd>/.omp/config.yml` and `<cwd>/.omp/settings.json`
 
 Native extension-module discovery also reads legacy JSON extension lists from:
@@ -105,7 +105,7 @@ Behavior split:
   excluded, while `additionalExtensionPaths` are still resolved normally
   (including package directories with `package.json#omp.extensions`).
 - CLI: `--no-extensions` follows the same explicit-only contract. Explicit
-  `-e/--extension` and `--hook` paths still load, and only sibling capability
+  explicit host extension paths still load, and only sibling capability
   roots from explicitly named extension packages remain eligible. Project/user
   `extensions:` settings and installed OMP extension packages are excluded from
   that sibling surface.

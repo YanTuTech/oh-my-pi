@@ -240,7 +240,6 @@ describe("SessionManager atomic rewrite race", () => {
 
 		const reloaded = await SessionManager.open(sessionFile, "/sessions", storage, {
 			initialCwd: "/cwd",
-			suppressBreadcrumb: true,
 		});
 		const branch = reloaded.getBranch();
 		expect(branch.some(entry => entry.type === "compaction" && entry.summary === "newer summary")).toBe(true);

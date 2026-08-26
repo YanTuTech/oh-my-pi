@@ -31,7 +31,7 @@ Two details matter:
 - **The nearest non-empty `.omp/` directory owns native project discovery.** Discovery starts in the current working directory and climbs toward the repository root. Once it finds a non-empty `.omp/`, it stops; native `AGENTS.md` and `RULES.md` are each read from that directory only. A missing file does not make discovery continue upward.
 - **Empty directories and files contribute nothing.** An empty `.omp/` directory is skipped during the walk. In the selected non-empty directory, an empty `AGENTS.md` or `RULES.md` contributes nothing.
 
-`~/.omp/agent` is shorthand for the active native agent directory. `PI_CODING_AGENT_DIR` relocates it. A named profile (`omp --profile <name>`, `OMP_PROFILE`, or `PI_PROFILE`) uses `~/.omp/profiles/<name>/agent` by default; external-tool user bases such as `~/.claude` are not profile-scoped.
+`~/.omp/agent` is shorthand for the active native agent directory. `PI_CODING_AGENT_DIR` relocates it. A named profile (`OMP_PROFILE` or `PI_PROFILE`) uses `~/.omp/profiles/<name>/agent` by default; external-tool user bases such as `~/.claude` are not profile-scoped.
 
 ### Monorepo example
 
@@ -68,7 +68,7 @@ Put broad, durable project background in `AGENTS.md`. Reserve `RULES.md` for sho
 | `agents-md` | `AGENTS.md`                                 | Project        | Standalone (non-config-directory) `AGENTS.md` files, discovered by walking up from the current directory to the repository root and, when that repository is nested under the user's home directory, through enclosing workspace directories up to but not including the home directory. With no repository root, discovery uses the home directory as the boundary for sessions under home and includes that boundary file. Files whose parent directory name starts with `.` are ignored — those belong to a config-directory provider instead.                                                                   |
 | `github`    | `.github/instructions/**/*.instructions.md` | Project rules  | GitHub Copilot / VS Code instruction files become rules. `applyTo: '*'`, `applyTo: '**'`, or `applyTo: '**/*'` is injected as always-apply content; other `applyTo` globs are listed in the rulebook with a generated description when needed and are readable as `rule://<name>`. Missing `applyTo` also produces a rulebook entry and a discovery warning. |
 
-Providers marked "(no ancestor walk-up)" only look in the current working directory's config directory. If you need ancestor walk-up behavior, prefer the native `.omp/AGENTS.md` format or a standalone `AGENTS.md` (the `agents-md` provider), or launch `omp` from the directory that holds the config directory.
+Providers marked "(no ancestor walk-up)" only look in the current working directory's config directory. If you need ancestor walk-up behavior, prefer the native `.omp/AGENTS.md` format or a standalone `AGENTS.md` (the `agents-md` provider), or set the Runtime session cwd to the directory that holds the config directory.
 
 ## Load order and shadowing
 
@@ -179,7 +179,7 @@ Keep `RULES.md` short. Long background belongs in `AGENTS.md`, where it costs co
 
 ## Disabling discovery providers
 
-Turn a provider off with the `disabledProviders` setting in `~/.omp/agent/config.yml`, a project's `.omp/config.yml`, or a `--config` overlay:
+Turn a provider off with the `disabledProviders` setting in `~/.omp/agent/config.yml`, a project's `.omp/config.yml`, or a `PI_CONFIG_FILES` overlay:
 
 ```yaml
 # .omp/config.yml
@@ -216,7 +216,7 @@ Remember that higher-precedence settings layers **replace** array settings rathe
 `disabledProviders` removes a whole config source. To drop one context file and keep the rest of what its provider contributes, list its extension id in `disabledExtensions`:
 
 ```yaml
-# ~/.omp/agent/config.yml, .omp/config.yml, or a --config overlay
+# ~/.omp/agent/config.yml, .omp/config.yml, or a PI_CONFIG_FILES overlay
 disabledExtensions:
   - context-file:user:CLAUDE.md
 ```
@@ -235,12 +235,12 @@ Disabling is not the same as shadowing, and the difference is visible: a disable
 
 Two everyday uses:
 
-- **Non-interactive runs.** A user-level context file written for your own interactive sessions is usually wrong for `-p` runs driven by another program, which arrive with their own instructions. Disabling it in a `--config` overlay keeps your interactive setup untouched.
+- **Embedded runs.** A user-level context file written for one host is often wrong for another application, which arrives with its own instructions. Disabling it in a `PI_CONFIG_FILES` overlay keeps the global setup untouched.
 - **Delegated work.** When one agent drives another, the caller's own operating instructions travel into the callee's prompt as user-level context and can contradict the task it was actually given.
 
 `disabledExtensions` is not path-scoped: only `enabledModels` and `disabledProviders` accept the `path:` form. Like every array setting it is replaced, not merged, by a higher-precedence layer.
 
-Browse the ids interactively with `/extensions`, which lists every discovered context file with its level, source, and current state, and toggles the same setting.
+Embedding hosts can list every discovered context file with its level, source, and current state and toggle the same setting through the extension/settings APIs.
 
 ## Troubleshooting
 
@@ -251,8 +251,8 @@ Browse the ids interactively with `/extensions`, which lists every discovered co
 - `.claude/CLAUDE.md`, `.gemini/GEMINI.md`, and `.github/copilot-instructions.md` are read only from the current working directory's config directory — not from every ancestor.
 - `~/.codex/AGENTS.md` and `~/.config/opencode/AGENTS.md` are user-level only and have no project equivalent.
 - Empty files contribute nothing for the native and standalone providers.
-- A disabled discovery provider contributes nothing — check `disabledProviders` across your global, project, and `--config` layers.
-- A single file can also be turned off on its own — check `disabledExtensions` for a matching `context-file:<level>:<basename>` entry, and remember that a project entry applies at every depth. `/extensions` shows the file as `disabled` when this is the cause.
+- A disabled discovery provider contributes nothing — check `disabledProviders` across your global, project, overlay, and runtime-override layers.
+- A single file can also be turned off on its own — check `disabledExtensions` for a matching `context-file:<level>:<basename>` entry, and remember that a project entry applies at every depth. Host extension diagnostics report the file as `disabled` when this is the cause.
 
 ### The wrong file wins
 

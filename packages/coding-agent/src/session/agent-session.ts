@@ -6989,6 +6989,10 @@ export class AgentSession {
 					...options,
 					additionalDirectories: this.settings.get("workspace.additionalDirectories"),
 				});
+				// A host-visible new-session boundary must survive process restart even
+				// before the first assistant reply. Terminal builds used to carry this
+				// state out-of-band; the headless Runtime owns it durably instead.
+				await this.sessionManager.ensureOnDisk();
 				this.#bash.markSessionTransition(bashTransition);
 				// The new session owns the transcript from here, so the previous
 				// conversation's advisor spend is retired with it. Clearing at the commit

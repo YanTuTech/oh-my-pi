@@ -5,7 +5,7 @@
  *   import { settings } from "./settings";
  *
  *   const enabled = settings.get("compaction.enabled");  // sync read
- *   settings.set("theme.dark", "titanium");               // sync write, saves in background
+ *   settings.set("compaction.enabled", true);              // sync write, saves in background
  *
  * For tests:
  *   const isolated = Settings.isolated({ "compaction.enabled": false });
@@ -42,7 +42,6 @@ import { AUTO_IMAGE_PROVIDER_ORDER, isImageProviderId } from "../tools/image-pro
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { INSPECT_IMAGE_MODES } from "../utils/inspect-image-mode";
 import { isSearchProviderId, SEARCH_PROVIDER_ORDER } from "../web/search/types";
-import { getAppearanceSettingsAdapter } from "./appearance-settings-adapter";
 import {
 	type BashInterceptorRule,
 	type GroupPrefix,
@@ -585,9 +584,6 @@ export class Settings {
 
 	#fireEffectiveSettingChanged(path: SettingPath, value: unknown, prev: unknown): void {
 		if (Object.is(value, prev)) return;
-		if (path === "statusLine.sessionAccent") {
-			statusLineSessionAccentSignal.fire();
-		}
 		if (path === "modelRoles") {
 			modelRolesSignal.fire();
 		}
@@ -687,10 +683,7 @@ export class Settings {
 		for (;;) {
 			await this.flush();
 			const mutationGeneration = this.#persistedMutationGeneration;
-			const previousSignaledValues = {
-				modelRoles: this.get("modelRoles"),
-				sessionAccent: this.get("statusLine.sessionAccent"),
-			};
+			const previousModelRoles = this.get("modelRoles");
 			const previousCodeModeValues = this.#codeModeSignalSnapshot();
 			const previousHookValues = new Map<SettingPath, unknown>();
 			for (const key of Object.keys(SETTING_HOOKS) as SettingPath[]) {
@@ -717,16 +710,8 @@ export class Settings {
 			this.#rebuildMerged();
 
 			const nextModelRoles = this.get("modelRoles");
-			if (!Bun.deepEquals(nextModelRoles, previousSignaledValues.modelRoles)) {
-				this.#fireEffectiveSettingChanged("modelRoles", nextModelRoles, previousSignaledValues.modelRoles);
-			}
-			const nextSessionAccent = this.get("statusLine.sessionAccent");
-			if (!Bun.deepEquals(nextSessionAccent, previousSignaledValues.sessionAccent)) {
-				this.#fireEffectiveSettingChanged(
-					"statusLine.sessionAccent",
-					nextSessionAccent,
-					previousSignaledValues.sessionAccent,
-				);
+			if (!Bun.deepEquals(nextModelRoles, previousModelRoles)) {
+				this.#fireEffectiveSettingChanged("modelRoles", nextModelRoles, previousModelRoles);
 			}
 			this.#fireCodeModeChangeIfNeeded(previousCodeModeValues);
 			for (const [key, previous] of previousHookValues) {
@@ -1531,18 +1516,44 @@ export class Settings {
 			}
 		}
 
-		// Migrate old flat "theme" string to nested theme.dark/theme.light
-		if (typeof raw.theme === "string") {
-			const oldTheme = raw.theme;
-			if (oldTheme === "light" || oldTheme === "dark") {
-				// Built-in defaults — just remove, let new defaults apply
-				delete raw.theme;
-			} else {
-				// Custom theme — detect luminance to place in correct slot
-				const slot = getAppearanceSettingsAdapter()?.isLightTheme(oldTheme) ? "light" : "dark";
-				raw.theme = { [slot]: oldTheme };
-			}
+		// Preserve the Runtime Mermaid prompting behavior while dropping the old
+		// terminal-specific setting namespace.
+		const tui = isRecord(raw.tui) ? (raw.tui as Record<string, unknown>) : undefined;
+		if (typeof tui?.renderMermaid === "boolean") {
+			const prompts = isRecord(raw.prompts) ? (raw.prompts as Record<string, unknown>) : {};
+			prompts.renderMermaid ??= tui.renderMermaid;
+			raw.prompts = prompts;
 		}
+
+		// Remove persisted settings whose only consumers belonged to the deleted
+		// terminal application. Runtime-owned startup and prompt settings remain.
+		delete raw.theme;
+		delete raw.symbolPreset;
+		delete raw.colorBlindMode;
+		delete raw.composer;
+		delete raw.statusLine;
+		delete raw.terminal;
+		delete raw.tui;
+		delete raw.display;
+		delete raw.showHardwareCursor;
+		delete raw.doubleEscapeAction;
+		delete raw.treeFilterMode;
+		delete raw.autocompleteMaxVisible;
+		delete raw.spelling;
+		delete raw.emojiAutocomplete;
+		delete raw.paste;
+		delete raw.update;
+		delete raw.marketplace;
+		delete raw.completion;
+		delete raw.error;
+		const startup = isRecord(raw.startup) ? (raw.startup as Record<string, unknown>) : undefined;
+		if (startup) {
+			delete startup.showSplash;
+			delete startup.setupWizard;
+			delete startup.checkUpdate;
+		}
+		const ask = isRecord(raw.ask) ? (raw.ask as Record<string, unknown>) : undefined;
+		if (ask) delete ask.notify;
 
 		// inspect_image.enabled (boolean) -> inspect_image.mode (enum). Explicit
 		// user choices are preserved: true -> "on", false -> "off". Configs with
@@ -2529,34 +2540,6 @@ class SettingSignal<A extends unknown[] = []> {
 }
 
 const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
-	"theme.dark": value => {
-		if (typeof value === "string") {
-			getAppearanceSettingsAdapter()?.setAutoThemeMapping("dark", value);
-		}
-	},
-	"theme.light": value => {
-		if (typeof value === "string") {
-			getAppearanceSettingsAdapter()?.setAutoThemeMapping("light", value);
-		}
-	},
-	symbolPreset: value => {
-		if (typeof value === "string" && (value === "unicode" || value === "nerd" || value === "ascii")) {
-			getAppearanceSettingsAdapter()
-				?.setSymbolPreset(value)
-				.catch(err => {
-					logger.warn("Settings: symbolPreset hook failed", { preset: value, error: String(err) });
-				});
-		}
-	},
-	colorBlindMode: value => {
-		if (typeof value === "boolean") {
-			getAppearanceSettingsAdapter()
-				?.setColorBlindMode(value)
-				.catch(err => {
-					logger.warn("Settings: colorBlindMode hook failed", { enabled: value, error: String(err) });
-				});
-		}
-	},
 	"provider.appendOnlyContext": value => {
 		if (typeof value === "string") {
 			appendOnlyModeSignal.fire(value);
@@ -2628,15 +2611,6 @@ const extendedContextSignal = new SettingSignal("extendedContext");
  * Returns an unsubscribe function.
  */
 export const onExtendedContextChanged = (cb: () => void) => extendedContextSignal.on(cb);
-
-/** Fires when `statusLine.sessionAccent` changes at runtime. */
-const statusLineSessionAccentSignal = new SettingSignal("statusLine.sessionAccent");
-
-/**
- * Subscribe to session-accent setting changes.
- * Returns an unsubscribe function. Callers should re-read settings in the callback.
- */
-export const onStatusLineSessionAccentChanged = (cb: () => void) => statusLineSessionAccentSignal.on(cb);
 
 /** Fires when any `hindsight.bankId` / `bankIdPrefix` / `scoping` value changes. */
 const hindsightScopeSignal = new SettingSignal("hindsight scope");

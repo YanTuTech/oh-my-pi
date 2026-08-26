@@ -10,7 +10,6 @@ import * as fs from "node:fs";
 import inspector from "node:inspector";
 import { isMainThread } from "node:worker_threads";
 import * as logger from "./logger";
-import { restoreTerminalStderr } from "./stderr-guard";
 
 // Cleanup reasons, in order of priority/meaning.
 export enum Reason {
@@ -311,7 +310,6 @@ function formatFatalError(label: string, err: Error): string {
 async function exitAfterFatal(label: string, logMessage: string, err: Error, reason: Reason): Promise<void> {
 	const forcedExit = setTimeout(() => exitProcess(1), CLEANUP_DEADLINE_MS);
 	try {
-		restoreTerminalStderr();
 		// A revoked terminal can make stream writes raise another fatal error. Use
 		// the descriptor directly so failure stays synchronous and contained.
 		try {

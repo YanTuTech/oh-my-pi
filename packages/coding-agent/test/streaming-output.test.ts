@@ -20,8 +20,6 @@ import { formatOutputNotice, outputMeta } from "@oh-my-pi/pi-coding-agent/tools/
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
 
 const createdTempDirs: string[] = [];
-const originalForceProtocol = Bun.env.PI_FORCE_IMAGE_PROTOCOL;
-const originalAllowPassthrough = Bun.env.PI_ALLOW_SIXEL_PASSTHROUGH;
 
 async function createTempDir(): Promise<string> {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "streaming-output-test-"));
@@ -38,10 +36,6 @@ afterEach(async () => {
 	for (const dir of createdTempDirs.splice(0)) {
 		await removeWithRetries(dir);
 	}
-	if (originalForceProtocol === undefined) delete Bun.env.PI_FORCE_IMAGE_PROTOCOL;
-	else Bun.env.PI_FORCE_IMAGE_PROTOCOL = originalForceProtocol;
-	if (originalAllowPassthrough === undefined) delete Bun.env.PI_ALLOW_SIXEL_PASSTHROUGH;
-	else Bun.env.PI_ALLOW_SIXEL_PASSTHROUGH = originalAllowPassthrough;
 });
 
 describe("truncateTailBytes", () => {
@@ -242,23 +236,8 @@ describe("OutputSink", () => {
 		expect(dumped.output).toBe("start\none\ntwo\n");
 	});
 
-	test("preserves SIXEL chunks when passthrough gates are enabled", async () => {
+	test("strips terminal image control sequences from Runtime output", async () => {
 		const sixel = "\x1bPqabc\x1b\\";
-		Bun.env.PI_FORCE_IMAGE_PROTOCOL = "sixel";
-		Bun.env.PI_ALLOW_SIXEL_PASSTHROUGH = "1";
-		const chunks: string[] = [];
-		const sink = new OutputSink({ onChunk: chunk => chunks.push(chunk) });
-		await sink.push(`before\n${sixel}\nafter`);
-		const dumped = await sink.dump();
-		expect(chunks).toHaveLength(1);
-		expect(chunks[0]).toContain(sixel);
-		expect(dumped.output).toContain(sixel);
-	});
-
-	test("strips SIXEL chunks when passthrough gates are disabled", async () => {
-		const sixel = "\x1bPqabc\x1b\\";
-		delete Bun.env.PI_FORCE_IMAGE_PROTOCOL;
-		delete Bun.env.PI_ALLOW_SIXEL_PASSTHROUGH;
 		const sink = new OutputSink();
 		await sink.push(sixel);
 		const dumped = await sink.dump();

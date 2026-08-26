@@ -6,36 +6,16 @@ Prewalk is off by default. Its default target is the model assigned to the `@smo
 
 ## Enable prewalk
 
-Enable prewalk persistently in the global config:
-
-```bash
-omp config set prewalk.enabled true
-```
-
-The equivalent YAML in `~/.omp/agent/config.yml` or a project `.omp/config.yml` is:
+Enable prewalk in `~/.omp/agent/config.yml`, a project `.omp/config.yml`, or a host-owned `Settings` instance:
 
 ```yaml
 prewalk:
   enabled: true
 ```
 
-Session flags override the configured value:
+SDK hosts can override the configured value per session through `CreateAgentSessionOptions.prewalk`, including the target model pattern or role.
 
-| Flag | Effect |
-| --- | --- |
-| `--prewalk` | Arm prewalk for the new session. |
-| `--no-prewalk` | Leave prewalk disabled for the session, even when `prewalk.enabled` is `true`. |
-| `--prewalk-into <model-or-role>` | Arm prewalk and use the supplied model pattern or role instead of `@smol`. |
-
-For example:
-
-```bash
-omp --prewalk
-omp --prewalk-into @smol
-omp --prewalk-into openai/gpt-5-mini
-```
-
-At startup, OMP resolves the target with the normal model-role and model-matching rules. If the target cannot be resolved or has no configured credentials, OMP prints a warning and starts with prewalk unarmed.
+At startup, the Runtime resolves the target with the normal model-role and model-matching rules. If the target cannot be resolved or has no configured credentials, the Runtime emits a warning and starts with prewalk unarmed.
 
 ## Handoff trigger
 
@@ -47,13 +27,13 @@ The switch is one-shot: after the handoff, prewalk disarms itself. The target mo
 
 ## Arm from an active session
 
-Run the slash command to arm prewalk without restarting OMP or enabling it in config:
+An ACP/RPC host may execute the slash command to arm prewalk without recreating the session or enabling it in config:
 
 ```text
 /prewalk
 ```
 
-`/prewalk` always targets the `@smol` role. If prewalk is already armed, the command leaves the existing target in place. After a handoff is consumed, switch to another model and run `/prewalk` again to arm another one-shot handoff. To choose a different target at startup, use `--prewalk-into`.
+`/prewalk` always targets the `@smol` role. If prewalk is already armed, the command leaves the existing target in place. After a handoff is consumed, switch to another model and run `/prewalk` again to arm another one-shot handoff. SDK hosts choose a different initial target through `CreateAgentSessionOptions.prewalk`.
 
 ## Subagent prewalk
 

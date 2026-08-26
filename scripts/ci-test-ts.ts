@@ -71,7 +71,7 @@ const codingAgentBucketPlans: Record<CodingAgentBucket, { label: string; paralle
 	native: { label: "native/tooling/browser/unit bucket", parallel: 1, chunkSize: 10 },
 };
 
-// Smaller workspace packages stay separate from native/TUI/integration suites so
+// Smaller workspace packages stay separate from native/browser/integration suites so
 // their short TS suites can run together. CI still downloads the Linux x64 native
 // addon before this bucket: shared utility barrels may load native-backed modules.
 const fastWorkspacePackages = [
@@ -248,7 +248,6 @@ async function getCodingAgentTestPartition(): Promise<CodingAgentTestPartition> 
 		const testFiles = (await collectTestsUnder(path.join(codingAgentDir, "test"), codingAgentDir)).sort();
 		const partition: CodingAgentTestPartition = {
 			singleton: [],
-			ui: [],
 			runtime: [],
 			native: [],
 		};

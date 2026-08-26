@@ -178,9 +178,8 @@ describe("session exit diagnostics", () => {
 		});
 		await Promise.resolve();
 
-		// Mirror InteractiveMode.init(): the postmortem "session-teardown"
-		// callback runs FIRST on SIGTERM/SIGHUP/uncaughtException (reverse
-		// registration order) and calls dispose(). Without reason threading,
+		// Mirror a host's postmortem callback on SIGTERM/SIGHUP/uncaughtException.
+		// Without reason threading,
 		// #doDispose would persist the generic "dispose"/"normal" and cancel the
 		// reason-specific agent-session recorder — losing the real trigger.
 		const teardown = createSessionTeardown({

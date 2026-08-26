@@ -158,8 +158,6 @@ export function createInitExperimentTool(
 			runtime.lastRunArtifactDir = null;
 			runtime.lastRunNumber = null;
 			runtime.lastRunSummary = null;
-			options.dashboard.updateWidget(ctx, runtime);
-			options.dashboard.requestRender();
 
 			const lines: string[] = [];
 			if (abandonedRuns > 0) {

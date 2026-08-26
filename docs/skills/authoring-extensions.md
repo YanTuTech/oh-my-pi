@@ -1,6 +1,6 @@
 ---
 name: authoring-extensions
-description: Use when creating a new omp extension. Covers ExtensionAPI, factory signature, tool/command/event registration, and local-dev testing.
+description: Use when creating a new Agent Runtime extension. Covers ExtensionAPI, factory signature, tool/command/event registration, and local-dev testing.
 ---
 
 # Authoring Extensions
@@ -19,7 +19,7 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-That is a working extension. Drop it into `~/.omp/agent/extensions/hello.ts` and restart omp to see the notification.
+That is a working extension. Drop it into `~/.omp/agent/extensions/hello.ts` and restart the embedding Runtime host to receive the notification.
 
 ## Full example
 
@@ -75,28 +75,28 @@ export default function myExtension(pi: ExtensionAPI) {
 
 ## Discovery paths
 
-omp loads extension modules from these sources:
+The Runtime loads extension modules from these sources:
 
 1. Native `.omp` locations discovered through the capability system:
    - `<cwd>/.omp/extensions/`
    - `~/.omp/agent/extensions/`
    - legacy extension paths listed in `.omp/settings.json#extensions` or `~/.omp/agent/settings.json#extensions`
-2. Enabled installed plugins under `~/.omp/plugins/node_modules` or a project plugin root — including npm, marketplace, and `omp plugin link` installs — via their `omp.extensions`/`pi.extensions` manifests.
+2. Enabled installed plugins under `~/.omp/plugins/node_modules` or a project plugin root — including npm, marketplace, and linked installs — via their `omp.extensions`/`pi.extensions` manifests.
 3. Explicit host paths passed as `CreateAgentSessionOptions.additionalExtensionPaths` and paths from the `extensions:` setting.
 
 The runtime de-duplicates by resolved absolute path — first seen wins.
 
-The user directory is the active profile's agent directory: the default is `~/.omp/agent`, while `omp --profile <name>` uses `~/.omp/profiles/<name>/agent` (and `PI_CODING_AGENT_DIR` overrides it).
+The user directory is the active profile's agent directory: the default is `~/.omp/agent`, while `OMP_PROFILE=<name>` uses `~/.omp/profiles/<name>/agent` (and `PI_CODING_AGENT_DIR` overrides it).
 
-When a path points to a directory, omp resolves the entry point in this order:
+When a path points to a directory, the Runtime resolves the entry point in this order:
 
 1. `package.json` with `omp.extensions` (or legacy `pi.extensions`) field
 2. `index.ts`
 3. `index.js`
 
-When scanning an `extensions/` directory, omp also loads direct `*.ts`/`*.js` files and one-level subdirectories that have `index.ts`, `index.js`, or a manifest.
+When scanning an `extensions/` directory, the Runtime also loads direct `*.ts`/`*.js` files and one-level subdirectories that have `index.ts`, `index.js`, or a manifest.
 
-Extension packages can also bundle sibling capability directories. When a package is loaded through `extensions:` or `--extension`/`-e`, the `omp-plugins` provider discovers its `skills/`, `hooks/pre|post/`, `tools/`, `commands/`, `rules/`, `prompts/`, and `.mcp.json`.
+Extension packages can also bundle sibling capability directories. When a package is loaded through `extensions:` or `CreateAgentSessionOptions.additionalExtensionPaths`, the `omp-plugins` provider discovers its `skills/`, `hooks/pre|post/`, `tools/`, `commands/`, `rules/`, `prompts/`, and `.mcp.json`.
 
 ## package.json manifest
 

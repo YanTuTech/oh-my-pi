@@ -55,7 +55,6 @@ async function createMinimalSession(
 		model: shouldSupplyModel ? (options.model ?? OPENAI_TEST_MODEL) : options.model,
 		settings: Settings.isolated({
 			"async.enabled": false,
-			"marketplace.autoUpdate": "off",
 		}),
 		disableExtensionDiscovery: true,
 		preloadedExtensions: undefined,

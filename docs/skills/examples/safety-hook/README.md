@@ -14,12 +14,14 @@ An `oh-my-pi` extension that demonstrates `tool_call` blocking. It intercepts `b
 cp -r . ~/.omp/agent/extensions/safety-hook
 ```
 
-Restart `omp`. The hook is active for all sessions.
+Restart the embedding Runtime host. The hook is active for all sessions.
 
 Or load once:
 
-```
-omp --extension ./safety-hook
+```ts
+await createAgentSession({
+  additionalExtensionPaths: ["./safety-hook"],
+});
 ```
 
 ## How it works

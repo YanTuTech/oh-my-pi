@@ -11,8 +11,6 @@ import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
 import type { Ellipsis } from "@oh-my-pi/pi-natives";
 import { pluralize } from "@oh-my-pi/pi-utils";
 import { replaceTabs, truncateToWidth } from "@oh-my-pi/pi-utils/display-text";
-import { isSettingsInitialized, settings } from "../config/settings";
-import { getDefault } from "../config/settings-schema";
 import type { Component, Theme } from "../extensibility/ui-contract";
 import { Hasher } from "../utils/hasher";
 import { formatDimensionNote, type ResizedImage } from "../utils/image-resize";
@@ -23,29 +21,6 @@ export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-uti
 // =============================================================================
 // Standardized Display Constants
 // =============================================================================
-
-/** Resolve inline image dimension caps from settings and viewport. */
-export function resolveImageOptions(): { maxWidthCells: number; maxHeightCells?: number } {
-	const activeSettings = isSettingsInitialized() ? settings : undefined;
-	const maxWidthCells = activeSettings?.get("tui.maxInlineImageColumns") ?? getDefault("tui.maxInlineImageColumns");
-	const rowSetting = Math.max(
-		0,
-		activeSettings?.get("tui.maxInlineImageRows") ?? getDefault("tui.maxInlineImageRows"),
-	);
-	const viewportRows = process.stdout.rows;
-	const viewportFraction = viewportRows ? Math.floor(viewportRows * 0.6) : 0;
-	let maxHeightCells: number | undefined;
-	if (rowSetting === 0) {
-		// No explicit cap — use viewport fraction as safety bound
-		maxHeightCells = viewportFraction || undefined;
-	} else if (viewportFraction > 0) {
-		maxHeightCells = Math.min(rowSetting, viewportFraction);
-	} else {
-		// Viewport size unknown (transitional state) — honor explicit setting
-		maxHeightCells = rowSetting;
-	}
-	return { maxWidthCells, maxHeightCells };
-}
 
 /** Preview limits for collapsed/expanded views */
 export const PREVIEW_LIMITS = {

@@ -150,15 +150,7 @@ export interface RuntimeStore {
 	ensure(sessionKey: string): AutoresearchRuntime;
 }
 
-export interface DashboardController {
-	clear(ctx: ExtensionContext): void;
-	requestRender(): void;
-	showOverlay(ctx: ExtensionContext, runtime: AutoresearchRuntime): Promise<void>;
-	updateWidget(ctx: ExtensionContext, runtime: AutoresearchRuntime): void;
-}
-
 export interface AutoresearchToolFactoryOptions {
-	dashboard: DashboardController;
 	getRuntime(ctx: ExtensionContext): AutoresearchRuntime;
 	pi: ExtensionAPI;
 }

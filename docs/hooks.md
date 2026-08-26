@@ -6,7 +6,7 @@ This document describes the **current hook subsystem code** in `packages/coding-
 
 The default CLI runtime initializes the **extension runner** path. In current startup flow:
 
-- `--hook` is treated as an alias for `--extension` (CLI paths are merged into `additionalExtensionPaths`)
+- Explicit hook/extension paths supplied by a host are merged into `CreateAgentSessionOptions.additionalExtensionPaths`.
 - JS/TS hook factories discovered through `hookCapability` (for example `.omp/hooks/pre/*.ts`) are loaded as extension modules so their `pi.on(...)` handlers bind to the runtime event bus
 - tools are wrapped by `ExtensionToolWrapper`, not `HookToolWrapper`
 - context transforms and lifecycle emissions go through `ExtensionRunner`

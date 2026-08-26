@@ -13,7 +13,7 @@ Covers:
 - Persistence guarantees, failure behavior, truncation/blob externalization
 - Storage abstractions (`FileSessionStorage`, `MemorySessionStorage`) and related utilities
 
-Does not cover `/tree` UI rendering behavior beyond semantics that affect session data.
+Does not cover host session-tree presentation beyond semantics that affect session data.
 
 ## Implementation Files
 
@@ -56,7 +56,7 @@ Terminal breadcrumb files are written under:
 ~/.omp/agent/terminal-sessions/<terminal-id>
 ```
 
-Breadcrumb content is original cwd and session file path, plus an optional third line `fresh`. A fresh breadcrumb preserves a `/new` boundary whose lazily-created JSONL file does not exist yet, preventing `continueRecent()` from reopening the previous session. Writes are synchronous, ordered, and best-effort.
+Breadcrumb content is original cwd and session file path, plus an optional third line `fresh`. A fresh breadcrumb preserves a new-session boundary whose lazily-created JSONL file does not exist yet, preventing `continueRecent()` from reopening the previous session. Writes are synchronous, ordered, and best-effort.
 
 ## File Format
 
@@ -241,7 +241,7 @@ If branching from root (`branchFromId === null`), `fromId` is the literal string
 
 ### `reset_boundary`
 
-A payload-free marker appended by `/clear`. The collapsed live transcript and rebuilt model context begin after the latest applicable boundary; full-history transcript export still retains entries before it.
+A payload-free marker appended by a host clear-context operation. The collapsed live transcript and rebuilt model context begin after the latest applicable boundary; full-history transcript export still retains entries before it.
 
 ### `custom`
 

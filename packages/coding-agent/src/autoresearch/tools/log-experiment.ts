@@ -250,9 +250,6 @@ export function createLogExperimentTool(
 				);
 			}
 
-			options.dashboard.updateWidget(ctx, runtime);
-			options.dashboard.requestRender();
-
 			const wallClockSeconds = pendingRun.durationMs !== null ? pendingRun.durationMs / 1000 : null;
 			const text = buildLogText(
 				finalState,

@@ -3,7 +3,7 @@
 Compaction and branch summaries are the two mechanisms that keep long sessions usable without losing prior work context.
 
 - **Compaction** rewrites old history into a summary on the current branch.
-- **Branch summary** captures abandoned branch context during `/tree` navigation.
+- **Branch summary** captures abandoned branch context during host-driven session-tree navigation.
 
 Both are persisted as session entries and converted back into user-context messages when rebuilding LLM input.
 
@@ -313,7 +313,7 @@ During `navigateTree(...)`:
 2. If caller requested summary (`options.summarize`), generate summary before switching leaf.
 3. If summary exists, attach it at the navigation target using `branchWithSummary(...)`.
 
-Operationally this is commonly driven by `/tree` flow when `branchSummary.enabled` is enabled.
+Operationally this is commonly driven by host session-tree flow when `branchSummary.enabled` is enabled.
 
 ### Branch switch shape (visual)
 
@@ -419,7 +419,7 @@ From `settings-schema.ts`:
 
 - `compaction.enabled` = `true`
 - `compaction.methodOrder` = `["remote", "snapcompact", "handoff", "shake", "soft"]`. `remote` uses provider-native OpenAI-compatible server compaction when available; unavailable or failed methods advance to the next preference.
-- `compaction.asyncEnabled` = `true`. Async (speculative) compaction: when context enters the pre-threshold band `[threshold − lead, threshold)` (lead = `clamp(threshold × 0.125, 8192, 32000)`), maintenance starts a background summarization for the first configured LLM-backed method (`remote`, `handoff`, or `soft`) off a branch snapshot, isolated from the live turn by a side session id. The armed result is committed instantly when the threshold is actually crossed, hiding summarization latency; post-snapshot turns are appended after the summary unchanged. Armed results are discarded when the branch prefix changes (new compaction, reset boundary, `/tree` navigation), when a provider-native replay payload is no longer readable by the active model, or when context grows past `keepRecentTokens` since compute (a fresh speculation replaces it). Speculation is skipped while an extension registers `session_before_compact`. The status line pulses the auto-compact icon while a speculation runs and holds it in accent when a result is armed.
+- `compaction.asyncEnabled` = `true`. Async (speculative) compaction: when context enters the pre-threshold band `[threshold − lead, threshold)` (lead = `clamp(threshold × 0.125, 8192, 32000)`), maintenance starts a background summarization for the first configured LLM-backed method (`remote`, `handoff`, or `soft`) off a branch snapshot, isolated from the live turn by a side session id. The armed result is committed instantly when the threshold is actually crossed, hiding summarization latency; post-snapshot turns are appended after the summary unchanged. Armed results are discarded when the branch prefix changes (new compaction, reset boundary, session-tree navigation), when a provider-native replay payload is no longer readable by the active model, or when context grows past `keepRecentTokens` since compute (a fresh speculation replaces it). Speculation is skipped while an extension registers `session_before_compact`; hosts can project its state through Runtime events.
 - `compaction.reserveTokens` is unset by default. The compaction layer normally applies a `16384`-token floor and at least 15% of the context window; on small windows where that default would be impractical, budget checks use the 15% proportional reserve. An explicit configured reserve is honored.
 - `compaction.keepRecentTokens` = `20000`
 - `compaction.autoContinue` = `true`

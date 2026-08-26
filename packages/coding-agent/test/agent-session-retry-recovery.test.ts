@@ -311,9 +311,7 @@ describe("AgentSession retry recovery", () => {
 			throw new Error("Expected recovery run to persist a session file");
 		}
 
-		const reloadedManager = await SessionManager.open(sessionFile, path.join(tempDir.path(), "sessions"), undefined, {
-			suppressBreadcrumb: true,
-		});
+		const reloadedManager = await SessionManager.open(sessionFile, path.join(tempDir.path(), "sessions"));
 		managers.push(reloadedManager);
 		const recoveredEntry = recoveredAssistantEntry(reloadedManager);
 		expect(recoveredEntry.message.retryRecovery).toMatchObject({

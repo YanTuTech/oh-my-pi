@@ -101,7 +101,7 @@ providers:
 
 - `auth`: `apiKey` (default), `none`, or `oauth`; for `models.yml` custom models, `oauth` is accepted by schema but does not waive the `apiKey` requirement
 - `discovery.type`: `ollama`, `llama.cpp`, `lm-studio`, `openai-models-list`, `proxy`, or `litellm`
-- `transport`: `pi-native` only. When set, every model under that provider is sent to an `omp auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
+- `transport`: `pi-native` only. When set, every model under that provider is sent to a compatible auth-gateway `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
 - `imageInputDecoder`: `stb` only. Set this on a custom model or `modelOverrides` entry when the serving backend uses an STB-compatible image decoder that cannot accept WebP; OMP converts attached and historical WebP images before provider dispatch.
 - `tokenizer`: opt into a specific embedded local tokenizer when a proxy's model id is ambiguous or noncanonical. Allowed values: `claude-v3`, `claude-v47`, `claude-v5`, `claude-v5-sonnet`, `qwen3`, `deepseek-v3`, `kimi-k2`, and `glm5`. Omit it to use catalog identity policy; unknown models retain the fast local estimate.
 
@@ -364,28 +364,18 @@ So a model can exist in registry but not be selectable until auth is available.
 
 ## Runtime model resolution
 
-### CLI and pattern parsing
+### Pattern parsing
 
 `model-resolver.ts` supports:
 
 - exact `provider/modelId`
 - exact model id (provider inferred)
 - fuzzy/substring matching
-- glob scope patterns in `--models` (e.g. `openai/*`, `*sonnet*`)
+- glob scope patterns (e.g. `openai/*`, `*sonnet*`)
 - optional `:thinkingLevel` suffix (`off|minimal|low|medium|high|xhigh|max`)
 
-`--provider` is legacy; `--model` is preferred. An exact `provider/modelId` is unambiguous; bare ids
-and fuzzy patterns are resolved against the available concrete models.
-
-### Initial model selection priority
-
-`findInitialModel(...)` uses this order:
-
-1. explicit CLI provider+model
-2. first scoped model (if not resuming)
-3. saved default provider/model
-4. known provider defaults (e.g. OpenAI/Anthropic/etc.) among available models
-5. first available model
+An exact `provider/modelId` is unambiguous; bare ids and fuzzy patterns are
+resolved against the available concrete models.
 
 ### Role aliases and settings
 
@@ -407,7 +397,7 @@ Related settings:
 - `providers.kimiApiFormat` (`openai` or `anthropic` request format)
 - `providers.openaiWebsockets` (`auto|off|on` websocket preference for OpenAI Codex transport)
 
-`modelRoles` stores model selectors such as `provider/modelId`; `enabledModels` and CLI `--models`
+`modelRoles` stores model selectors such as `provider/modelId`; `enabledModels`
 accept exact selectors, globs, and fuzzy matches.
 
 Global `enabledModels` and `disabledProviders` entries may also be scoped to a path prefix:
@@ -427,7 +417,7 @@ disabledProviders:
 
 String entries apply everywhere. Scoped entries apply when the current working directory is the configured path or one of its subdirectories. Use `path`, `paths`, `pathPrefix`, or `pathPrefixes`; use `models` for `enabledModels`, `providers` for `disabledProviders`, or `values` for either.
 
-## `/model` and `omp models`
+## Host model selection and `/model`
 
 Both surfaces keep provider-prefixed concrete models visible and selectable. Selecting a provider
 row stores its explicit `provider/modelId`.

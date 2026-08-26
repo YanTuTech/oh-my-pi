@@ -6,7 +6,7 @@ A **provider** is the account or backend namespace, such as `anthropic`, `openai
 
 This page covers how providers become available, how credentials are resolved, the provider/environment-variable map, local engines, disabling providers, and custom providers. For endpoint-specific request, reasoning, tool, stream, usage, and retry constraints, see [Provider endpoint constraints](./provider-endpoint-constraints.md). For model selection and the full `models.yml` schema, see [Model and Provider Configuration](./models.md). For config-file locations and merge precedence, see [Settings](./settings.md). For credential storage and login flows in depth, see [Secrets and credentials](./secrets.md). For the complete environment-variable reference, see [Environment variables](./environment-variables.md). For local engine setup, see [Local models](./local-models.md). For context-file discovery providers, see [Context files](./context-files.md).
 
-## How `omp` decides a provider is available
+## How the Runtime decides a provider is available
 
 At startup the model registry assembles its catalog from four sources, in order:
 
@@ -26,30 +26,25 @@ Keyless local engines are a special case: `ollama`, `llama.cpp`, and `lm-studio`
 
 ## Credentials and precedence
 
-When a provider needs an API key, `omp` resolves it in this order (first match wins):
+When a provider needs an API key, the Runtime resolves it in this order (first match wins):
 
-1. **Runtime override**: a key supplied for the current process, for example CLI `--api-key`. Never persisted.
+1. **Runtime override**: a key supplied by the embedding host for the current process. Never persisted.
 2. **`models.yml` config key**: an `apiKey` pinned on a custom provider, registered as a config-sourced bearer. This deliberately beats stored OAuth, so a key supplied for a custom `baseUrl` or gateway is honored instead of forwarding an upstream OAuth token the proxy would reject.
 3. **Stored OAuth credential**: refreshed when needed; multiple accounts are ranked and rotated automatically. For Anthropic and ChatGPT (Codex), each organization or workspace counts as its own account: one email holding both a Team or Enterprise seat and a personal plan can log in once per subscription (pick the workspace on the browser consent page), and rotation treats them as two accounts.
-4. **Login-sourced stored API key**: an API-key credential saved by a successful `/login`.
+4. **Host-provisioned stored API key**: an API-key credential saved through `AuthStorage`.
 5. **Provider environment variable**: including values loaded from `.env` files (see [the env-var table](#environment-variables-and-env-files)).
 6. **Other stored API key**: for example, a broker-migrated key. This is a last resort so an explicit environment variable wins.
 7. **`models.yml` fallback resolver**: keys for custom providers not otherwise registered.
 
 Stored credentials live in the auth store at `~/.omp/agent/agent.db` for local auth, or in the configured auth-broker snapshot when running in broker mode. (`PI_CODING_AGENT_DIR` relocates the `~/.omp/agent` base, and the auth store moves with it.)
 
-### OAuth vs API key, and provider-scoped logins
+### OAuth vs API key, and provider-scoped authentication
 
-Logins are **provider-scoped**: authenticating `anthropic` does not authenticate `openai`, and each provider tracks its own credentials. A disabled provider stays disabled even with valid stored auth.
+Authentication is **provider-scoped**: authenticating `anthropic` does not authenticate `openai`, and each provider tracks its own credentials. A disabled provider stays disabled even with valid stored auth.
 
-Use the interactive slash commands inside a session:
+Embedding hosts use `AuthStorage` and the broker client APIs for login, logout, status, import, and migration. For OAuth flows that require a pasted callback, the host completes the provider registry flow with that callback URL. See [Secrets and credentials](./secrets.md) for the broker model.
 
-- `/login` — opens the OAuth/key selector. `/login <provider>` jumps straight to one provider (e.g. `/login anthropic`); for an OAuth flow that needs a pasted callback, run `/login <redirect-url>` to complete it.
-- `/logout` — opens the provider selector to remove stored credentials.
-
-For headless or remote setups backed by a shared auth broker, the CLI exposes `omp auth-broker login <provider>` / `omp auth-broker logout` (and `status`, `list`, `import`, `migrate`). See [Secrets and credentials](./secrets.md) for the broker model.
-
-When a model has no credentials, `omp` tells you to run `/login` or set the provider's environment variable.
+When a model has no credentials, provision it through the host or set the provider's environment variable.
 
 ### Pinning a key in `models.yml`
 
@@ -150,13 +145,13 @@ Each provider has one or more environment variables that supply a key when no st
 | `llama.cpp`                      | `LLAMA_CPP_API_KEY` (only when the server requires auth)                      |
 | `vllm`                           | `VLLM_API_KEY` (optional for an unauthenticated local server)                 |
 
-OAuth-backed providers such as `anthropic`, `github-copilot`, `cursor`, `ollama-cloud`, `qwen-portal`, `kimi-code`, `xai-oauth`, `wafer-serverless`, `google-gemini-cli`, and `google-antigravity` are normally reached through `/login` rather than an environment variable. See [Environment variables](./environment-variables.md) for search-tool and configuration variables not listed here.
+OAuth-backed providers such as `anthropic`, `github-copilot`, `cursor`, `ollama-cloud`, `qwen-portal`, `kimi-code`, `xai-oauth`, `wafer-serverless`, `google-gemini-cli`, and `google-antigravity` are normally provisioned through the embedding host rather than an environment variable. See [Environment variables](./environment-variables.md) for search-tool and configuration variables not listed here.
 
 ### `.env` discovery and precedence
 
-`omp` eagerly loads `.env` files into the process environment before any provider lookup. It reads four files and, for each variable, the **first** source that defines it wins. Effective precedence, high to low:
+The Runtime eagerly loads `.env` files into the process environment before any provider lookup. It reads four files and, for each variable, the **first** source that defines it wins. Effective precedence, high to low:
 
-1. The process environment inherited by `omp` (already-set variables always win).
+1. The process environment inherited by the Runtime host (already-set variables always win).
 2. `<cwd>/.env`
 3. `~/.omp/agent/.env`
 4. `~/.omp/.env`
@@ -253,7 +248,7 @@ Effective result inside the project:
 ["groq"]
 ```
 
-The project array re-enables `anthropic`, `openai`, and `google` for sessions launched from that project. If you want a project to _add_ to the global set, repeat the global IDs in the project file. See [Settings](./settings.md) for the full precedence chain, including `--config` overlays and runtime overrides.
+The project array re-enables `anthropic`, `openai`, and `google` for sessions launched from that project. If you want a project to _add_ to the global set, repeat the global IDs in the project file. See [Settings](./settings.md) for the full precedence chain, including `PI_CONFIG_FILES` overlays and runtime overrides.
 
 ## Path-scoped `disabledProviders`
 
@@ -359,12 +354,12 @@ disabledProviders:
 
 ## Troubleshooting
 
-**A provider's models are not selectable.** Confirm the provider has credentials (`/login <provider>`, an exported environment variable, or a `models.yml` `apiKey`) and that its ID is not in the effective `disabledProviders` list. Remember the rule: not disabled **and** (keyless **or** has credentials). Keyless local engines only appear once the engine is actually running and responding.
+**A provider's models are not selectable.** Confirm the provider has credentials (a host-provisioned credential, an exported environment variable, or a `models.yml` `apiKey`) and that its ID is not in the effective `disabledProviders` list. Remember the rule: not disabled **and** (keyless **or** has credentials). Keyless local engines only appear once the engine is actually running and responding.
 
-**The wrong key is being used (a stale key from `.env`).** Resolution favors runtime `--api-key`, then a `models.yml` config key, stored OAuth, a key saved by `/login`, environment or `.env`, other stored API keys, and finally the `models.yml` fallback resolver. An already-set process environment variable also beats every `.env` file, and `<cwd>/.env` beats `~/.env`. If an unexpected key wins, check for an exported shell variable and the four `.env` files in precedence order, and clear the one that should not apply.
+**The wrong key is being used (a stale key from `.env`).** Resolution favors a host runtime override, then a `models.yml` config key, stored OAuth, a host-provisioned stored key, environment or `.env`, other stored API keys, and finally the `models.yml` fallback resolver. An already-set process environment variable also beats every `.env` file, and `<cwd>/.env` beats `~/.env`. If an unexpected key wins, check for an exported shell variable and the four `.env` files in precedence order, and clear the one that should not apply.
 
-**A provider still appears even though I disabled it.** `disabledProviders` arrays are replaced, not merged: a project `<project>/.omp/config.yml` array fully overrides the global one. Verify the _effective_ list for the directory you are in (path-scoped entries only apply at or under their configured path), and confirm the ID is spelled exactly. Use `omp config get disabledProviders` to inspect the merged value (see [Settings](./settings.md)).
+**A provider still appears even though I disabled it.** `disabledProviders` arrays are replaced, not merged: a project `<project>/.omp/config.yml` array fully overrides the global one. Verify the _effective_ list for the directory you are in (path-scoped entries only apply at or under their configured path), and confirm the ID is spelled exactly. Host code can inspect `settings.get("disabledProviders")` after resolution (see [Settings](./settings.md)).
 
 **A discovery provider name had no effect on models (or vice-versa).** The ID namespace is shared. `gemini`, `codex`, `claude`, `native`, and `agents` are discovery-source IDs; the Google model backend is `google`. Make sure you are disabling the right kind of provider.
 
-**A custom `models.yml` provider does not load.** A YAML or schema error makes the registry skip the custom file. Validate the file with `omp models` (use `omp models find <substr>` to scope it to one provider). A provider with custom `models` needs `baseUrl`, authentication (`apiKey`, unless `auth: none`), and `api` at provider level or on every model. A provider with no models is also valid when it defines at least one supported override (`baseUrl`, `headers`, `apiKey`, `auth: none`, `compat`, `disableStrictTools`, `remoteCompaction`, `modelOverrides`, or `discovery`). Discovery providers may omit `models`, but need provider-level `api` unless `discovery.type` is `proxy`. An explicit `ollama`, `lm-studio`, or `llama.cpp` entry intentionally replaces built-in discovery for that ID. See [Model and Provider Configuration](./models.md).
+**A custom `models.yml` provider does not load.** A YAML or schema error makes the registry skip the custom file. Runtime hosts can inspect `ModelRegistry` diagnostics and filter the resolved model list by provider or id. A provider with custom `models` needs `baseUrl`, authentication (`apiKey`, unless `auth: none`), and `api` at provider level or on every model. A provider with no models is also valid when it defines at least one supported override (`baseUrl`, `headers`, `apiKey`, `auth: none`, `compat`, `disableStrictTools`, `remoteCompaction`, `modelOverrides`, or `discovery`). Discovery providers may omit `models`, but need provider-level `api` unless `discovery.type` is `proxy`. An explicit `ollama`, `lm-studio`, or `llama.cpp` entry intentionally replaces built-in discovery for that ID. See [Model and Provider Configuration](./models.md).

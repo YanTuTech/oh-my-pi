@@ -34,11 +34,10 @@ Do not import unexported `native/*` implementation paths from package consumers.
 | Process and files        | `Process`, `FileLock`                                                                                                                                             | `ps.rs`, `file_lock/mod.rs`                                           | classes/mixed        |
 | Desktop and clipboard    | `DesktopSession`, `copyToClipboard`, `readImageFromClipboard`                                                                                                     | `desktop/mod.rs`, `clipboard.rs`                                      | class, sync, promise |
 | Audio and live media     | `AudioCapture`, `AudioPlayback`, `LiveWebRtcPeer`                                                                                                                 | `audio.rs`, `live.rs`                                                 | classes/mixed        |
-| Text and highlighting    | `wrapTextWithAnsi`, `truncateToWidth`, `sliceWithWidth`, `extractSegments`, `visibleWidth`, `setHangulCompatJamoWidthOverride`, `highlightCode`, language queries | `text.rs`, `highlight.rs`                                             | sync                 |
-| Conversion and rendering | `htmlToMarkdown`, `encodeSixel`, `renderSnapcompactPng`, `snapcompactSupportedChars`                                                                              | `html.rs`, `sixel.rs`, `snapcompact.rs`                               | mixed sync/promise   |
-| Tokens and system        | `countTokens`, macOS appearance/power exports, `getWorkProfile`, `deviceCheckGenerateToken`                                                                       | `tokens.rs`, `appearance.rs`, `power.rs`, `prof.rs`, `devicecheck.rs` | mixed                |
+| Text layout              | `wrapTextWithAnsi`, `truncateToWidth`, `sliceWithWidth`, `extractSegments`, `visibleWidth`                                                                       | `text.rs`                                                             | sync                 |
+| Conversion and rendering | `htmlToMarkdown`, `renderSnapcompactPng`, `snapcompactSupportedChars`                                                                                             | `html.rs`, `snapcompact.rs`                                           | promises             |
+| Tokens and system        | `countTokens`, macOS power exports, `getWorkProfile`, `deviceCheckGenerateToken`                                                                                  | `tokens.rs`, `power.rs`, `prof.rs`, `devicecheck.rs`                  | mixed                |
 | Isolation                | `isoBackend`, `isoProbe`, `isoResolve`, `isoIsUnavailableError`, `isoStart`, `isoStop`, `isoDiff`                                                                 | `iso.rs`                                                              | mixed sync/promise   |
-| Keys                     | `parseKey`, `matchesKey`, Kitty/legacy helpers                                                                                                                    | `keys.rs`                                                             | sync                 |
 
 Consult `native/index.d.ts` for exact option/result fields and signatures. Notable current signatures include `renderSnapcompactPng(...): Promise<string>`, `readImageFromClipboard(): Promise<ClipboardImage | undefined | null>`, and typed-array vector inputs/results.
 
@@ -48,7 +47,7 @@ The call style is part of the public contract:
 
 - CPU-heavy/blocking APIs generally return promises through napi-rs tasks, including `grep`, `glob`, `fuzzyFind`, AST search/edit, snapcompact rendering, and HTML conversion.
 - Tokio-backed operations such as shell, PTY, isolation lifecycle, device check, desktop operations, and live media use promises where declared.
-- In-memory transforms and direct probes generally remain synchronous: `search`, `hasMatch`, block boundaries, text/layout helpers, diffs, vector ranking, highlighting, key parsing, and isolation probe/resolve helpers.
+- In-memory transforms and direct probes generally remain synchronous: `search`, `hasMatch`, block boundaries, text/layout helpers, diffs, vector ranking, and isolation probe/resolve helpers.
 - Stateful resources are classes. Their constructors and individual methods can have different sync/async behavior; use the declarations rather than assuming the whole class is asynchronous.
 
 Changing a public function between synchronous and promise-returning is breaking. `renderSnapcompactPng`, for example, must be awaited even though adjacent snapcompact character probing is synchronous.
@@ -68,8 +67,6 @@ The generated runtime enum objects currently are:
 - `GrepOutputMode`
 - `IsoBackendKind`
 - `IsoChangeKind`
-- `KeyEventType`
-- `MacOSAppearance`
 - `ProcessStatus`
 
 Numeric and string enum declarations constrain TypeScript callers but do not by themselves prove that arbitrary untyped values are semantically valid. Binary APIs use typed arrays (`Uint8Array`, `Float32Array`, `Float64Array`, `Uint32Array`) where declared; do not replace them with ordinary arrays without an explicit conversion.

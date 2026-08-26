@@ -560,7 +560,7 @@ GitLab Duo is integrated via two distinct providers in OMP: **GitLab Duo Non-Age
 - **Catalog Generation Rules**: `scripts/generate-models.ts` excludes `gitlab-duo-agent` from static generation discovery to prevent bundling single-account namespace models into static catalogs, bundling only `buildGitLabDuoWorkflowFallbackModel` as a generic fallback seed.
 
 ## Pi Native
-Pi Native is a lossless internal server/client transport protocol used when a pi-ai client (such as containerized `omp` or a sidecar agent slot) delegates request execution to an `omp auth-gateway` holding real provider credentials. Activated when a `Model` sets `transport: "pi-native"`, `streamSimple` in `packages/ai/src/stream.ts` short-circuits local provider resolution and POSTs the canonical `Context` directly to `/v1/pi/stream`. Primary entry modules are `packages/ai/src/providers/pi-native-client.ts` (`streamPiNative`) on the client side, `packages/ai/src/providers/pi-native-server.ts` (`parseRequest`, `encodeStream`, `formatError`) on the wire framing side, and `packages/ai/src/auth-gateway/server.ts` (`POST /v1/pi/stream` route handler) on the server side.
+Pi Native is a lossless internal server/client transport protocol used when a pi-ai client (such as a containerized Runtime or sidecar agent slot) delegates request execution to a compatible auth gateway holding real provider credentials. Activated when a `Model` sets `transport: "pi-native"`, `streamSimple` in `packages/ai/src/stream.ts` short-circuits local provider resolution and POSTs the canonical `Context` directly to `/v1/pi/stream`. Primary entry modules are `packages/ai/src/providers/pi-native-client.ts` (`streamPiNative`) on the client side, `packages/ai/src/providers/pi-native-server.ts` (`parseRequest`, `encodeStream`, `formatError`) on the wire framing side, and `packages/ai/src/auth-gateway/server.ts` (`POST /v1/pi/stream` route handler) on the server side.
 
 ### Special casings
 - **Lossless Pass-through & Dialect Absence**: Unlike OpenAI/Anthropic routes, `pi-native` is not a textual tool-call dialect (`docs/toolconv/pi-native.md`). Tool calls remain canonical pi-ai `ToolCall` content blocks inside `Context` and `AssistantMessageEvent`. It preserves first-class pi-ai fields (service tier, cache markers, thinking budgets, tool-choice variants, image blocks, tool-call IDs) without foreign-wire quantization.
@@ -789,7 +789,7 @@ Fireworks (`packages/ai/src/registry/fireworks.ts`) is a high-throughput AI infe
 
 ### Auth & usage
 - **API Key Authentication**: Authenticates with HTTP Bearer tokens (`Authorization: Bearer ${apiKey}`) configured via `FIREWORKS_API_KEY` (resolved via `getEnvApiKey` in `packages/ai/src/stream.ts`).
-- **Control-Plane Login Validation**: `/login fireworks` (`loginFireworks` in `packages/ai/src/registry/fireworks.ts`) validates credentials against the static control-plane catalog `GET /v1/accounts/fireworks/models?filter=supports_serverless%3Dtrue&pageSize=1` rather than `/v1/models` (the inference endpoint serves per-account deployments and returns 500 for accounts without active deployments).
+- **Control-Plane Authentication Validation**: the Fireworks registry flow (`loginFireworks` in `packages/ai/src/registry/fireworks.ts`) validates credentials against the static control-plane catalog `GET /v1/accounts/fireworks/models?filter=supports_serverless%3Dtrue&pageSize=1` rather than `/v1/models` (the inference endpoint serves per-account deployments and returns 500 for accounts without active deployments).
 - **Usage Accounting**: Token usage is processed via standard `openai-completions` accounting in `calculateOpenAIUsageAccounting` (`packages/ai/src/providers/openai-shared.ts`), extracting `prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens`, and `completion_tokens_details.reasoning_tokens`.
 
 ### Catalog model handling
@@ -964,7 +964,7 @@ Hugging Face Inference provides access to open-source model serverless endpoints
 - **Catalog Discovery**: Participating in catalog generation via `catalogDiscovery`, `generate-models.ts` (`packages/catalog/scripts/generate-models.ts`) resolves API tokens via `resolveProviderApiKey` and calls `fetchOpenAICompatibleModels` (`packages/catalog/src/discovery/openai-compatible.ts`) against `https://router.huggingface.co/v1/models` to discover available Hub inference endpoints.
 
 ## Kilo Gateway (`kilo`)
-Kilo Gateway (`kilo`) is an AI model aggregator and proxy service (`https://api.kilo.ai/api/gateway`) using the OpenAI Chat Completions transport (`api: "openai-completions"`). It supports authentication via `KILO_API_KEY` or device-code OAuth flow (`/login kilo`), and allows unauthenticated dynamic model discovery from its OpenAI-compatible `/models` catalog endpoint.
+Kilo Gateway (`kilo`) is an AI model aggregator and proxy service (`https://api.kilo.ai/api/gateway`) using the OpenAI Chat Completions transport (`api: "openai-completions"`). It supports authentication via `KILO_API_KEY` or the host-driven device-code OAuth flow, and allows unauthenticated dynamic model discovery from its OpenAI-compatible `/models` catalog endpoint.
 
 ### Special casings
 - **Device-Code OAuth Authentication**: `loginKilo` in `packages/ai/src/registry/kilo.ts` initiates device authorization via `POST https://api.kilo.ai/api/device-auth/codes`, returning a user `code`, `verificationUrl`, and `expiresIn` seconds. It displays instructions via `callbacks.onAuth` and polls `GET https://api.kilo.ai/api/device-auth/codes/<userCode>` every 5,000ms until expiration. Handles HTTP 202 (pending), 403/410 (denied/expired), and rate limiting (HTTP 429), returning access tokens with 1-year expiration upon approval (`pollData.status === "approved"`). Supports cancellation via `callbacks.signal`.
@@ -973,7 +973,7 @@ Kilo Gateway (`kilo`) is an AI model aggregator and proxy service (`https://api.
 - **Provider Priority**: Included in `packages/catalog/src/identity/priority.ts` provider priority sequence (`"opencode-go"`, `"kilo"`, `"vercel-ai-gateway"`).
 
 ### Auth & usage
-- **API Key & OAuth Tokens**: Authenticates via static environment variable `KILO_API_KEY` or OAuth access tokens issued through the device-code flow (`/login kilo`).
+- **API Key & OAuth Tokens**: Authenticates via static environment variable `KILO_API_KEY` or OAuth access tokens issued through the host-driven device-code flow.
 - **Bearer Token Headers**: Requests pass credentials as standard Bearer tokens (`Authorization: Bearer <key>`) against base URL `https://api.kilo.ai/api/gateway`.
 
 ### Catalog model handling
@@ -1008,7 +1008,7 @@ LiteLLM is an open-source AI proxy and gateway that unifies access to multiple L
 - **Loopback stream-timeout floor (`packages/catalog/src/compat/openai.ts`)**: Even though LiteLLM is excluded from `isLocalOpenAICompatBackend`, loopback/RFC1918 URLs (`localhost`, `127.0.0.1`) still participate in `hasLocalLoopbackBaseUrl`, preserving the local stream-timeout floor to avoid premature prefill timeouts when fronting slow local backends.
 - **Anthropic & Bedrock tool compatibility (`packages/ai/src/providers/openai-completions.ts`)**:
   - When `context.tools` is `undefined` but conversation history contains tool calls, `params.tools` is set to `[]` for Anthropic-via-LiteLLM compatibility.
-  - When `context.tools` is explicitly empty (`[]`, e.g., `/btw` or background turns), `params.tools` and `tool_choice: "none"` are omitted so LiteLLM → Bedrock routes do not generate invalid, empty `toolConfig` blocks.
+  - When `context.tools` is explicitly empty (`[]`, e.g., ephemeral side questions or background turns), `params.tools` and `tool_choice: "none"` are omitted so LiteLLM → Bedrock routes do not generate invalid, empty `toolConfig` blocks.
 - **Telemetry & gateway header detection (`packages/ai/src/telemetry.ts`, `packages/ai/src/auth-gateway/http.ts`)**: `detectGatewayFromHeaders` inspects `x-litellm-call-id` (falling back to `x-litellm-model-id` or `x-litellm-model-group`) to populate `pi.gen_ai.gateway.*` span attributes. Auth gateway HTTP endpoints expose `x-litellm-model-id`, `x-litellm-model-api-base`, `x-litellm-response-cost`, and `x-litellm-response-duration-ms`.
 
 ### Auth & usage
@@ -1076,7 +1076,7 @@ MiniMax provides foundation models (including MiniMax-M3 and M2 generation) acce
 ### Auth & usage
 - **Auth keys**: Uses `MINIMAX_API_KEY` (`minimax`), `MINIMAX_CODE_API_KEY` (`minimax-code`), and `MINIMAX_CODE_CN_API_KEY` (`minimax-code-cn`) declared in `packages/catalog/src/provider-models/descriptors.ts`.
 - **Token Plan login**: `loginMiniMaxCode` and `loginMiniMaxCodeCn` in `packages/ai/src/registry/oauth/minimax-code.ts` drive browser login flows to `platform.minimax.io` (international) and `platform.minimaxi.com` (China) to prompt and validate API key setup against model `MiniMax-M3`.
-- **Usage quota**: `minimaxCodeUsageProvider` in `packages/ai/src/usage/minimax-code.ts` polls `GET /v1/token_plan/remains` at `https://api.minimax.io` (or China equivalent), parsing rolling interval and weekly usage windows per plan bucket into remaining percentages for `omp usage`.
+- **Usage quota**: `minimaxCodeUsageProvider` in `packages/ai/src/usage/minimax-code.ts` polls `GET /v1/token_plan/remains` at `https://api.minimax.io` (or China equivalent), parsing rolling interval and weekly usage windows per plan bucket into host-readable remaining percentages.
 
 ### Catalog model handling
 - **Default model**: `MiniMax-M3` set in `packages/catalog/src/provider-models/descriptors.ts` (`minimax`, `minimax-code`, `minimax-code-cn`).
@@ -1084,7 +1084,7 @@ MiniMax provides foundation models (including MiniMax-M3 and M2 generation) acce
 - **OpenAI completions flags**: `openAiCompletionsDescriptor` in `packages/catalog/src/provider-models/openai-compat.ts` configures `supportsStore: false`, `supportsDeveloperRole: false`, `supportsReasoningEffort: false`, and `reasoningContentField: "reasoning_content"`.
 
 ## MiniMax Token Plan (`minimax-code`)
-The MiniMax Token Plan provider (`minimax-code`, alongside its mainland China regional variant `minimax-code-cn`) provides access to MiniMax subscription models such as `MiniMax-M3` and `MiniMax-M2.5` using the OpenAI Chat Completions transport over HTTP POST SSE (`https://api.minimax.io/v1` for international, `https://api.minimaxi.com/v1` for China). In contrast to plain `minimax` (which routes over the Anthropic Messages transport using standard static API key authentication), `minimax-code` uses an interactive subscription login flow and features token plan quota monitoring via `omp usage`.
+The MiniMax Token Plan provider (`minimax-code`, alongside its mainland China regional variant `minimax-code-cn`) provides access to MiniMax subscription models such as `MiniMax-M3` and `MiniMax-M2.5` using the OpenAI Chat Completions transport over HTTP POST SSE (`https://api.minimax.io/v1` for international, `https://api.minimaxi.com/v1` for China). In contrast to plain `minimax` (which routes over the Anthropic Messages transport using standard static API key authentication), `minimax-code` uses the host interaction contract for subscription login and exposes token-plan quota data through the usage provider.
 
 ### Special casings
 - **Transport Difference from Plain `minimax`**: Plain `minimax` (`minimax` / `minimax-cn`) communicates over the `anthropic-messages` transport (`https://api.minimax.io/anthropic`), whereas `minimax-code` (`minimax-code` / `minimax-code-cn`) targets the `openai-completions` transport (`/v1/chat/completions`).
@@ -1459,7 +1459,7 @@ Umans AI Coding Plan is a proxy service for AI coding models, operating via the 
 - **Thinking / reasoning effort**: Supports thinking configurations with levels mapped via `UMANS_REASONING_EFFORT_BY_LEVEL` (`packages/catalog/src/provider-models/openai-compat.ts`). GLM-5.2 on Umans uses a two-tier high/max effort scale where `max` maps to the `anthropic-budget-effort` mode (`xhigh` effort) (`packages/catalog/src/model-thinking.ts`).
 
 ### Auth & usage
-- **Auth**: Uses `UMANS_AI_CODING_PLAN_API_KEY` environment variable or `/login umans` key prompt (`packages/ai/src/registry/umans.ts`, `packages/ai/src/registry/registry.ts`). Key validation executes a lightweight Anthropic messages call (`max_tokens: 1`) to `https://api.code.umans.ai/v1/messages`.
+- **Auth**: Uses the `UMANS_AI_CODING_PLAN_API_KEY` environment variable or a key provisioned by the embedding host (`packages/ai/src/registry/umans.ts`, `packages/ai/src/registry/registry.ts`). Key validation executes a lightweight Anthropic messages call (`max_tokens: 1`) to `https://api.code.umans.ai/v1/messages`.
 - **Usage endpoint**: Fetches quota and rate limit status from `GET /v1/usage` (`packages/ai/src/usage/umans.ts`) using `Authorization: Bearer <key>`.
 - **Limits surfaced**: Returns a rolling 5-hour request split into a model-weighted soft cap (`umans:requests:soft`, the "effective requests" contract) and a raw burst ceiling (`umans:requests:hard`, `hard_cap`), plus an instantaneous session concurrency limit (`umans:concurrency`). The soft cap only ever warns — `exhausted` is reserved for the burst ceiling, where throttling actually starts. Payloads without a reported burst ceiling (`hard_cap`) collapse to a single weighted `umans:requests` row that can exhaust at the effective-request limit, so request exhaustion is never unreportable; legacy payloads without weighted counters fall back to a single raw `umans:requests` row. In both single-row shapes the weighted counter (when present) stays authoritative — raw burst traffic above the limit never fabricates an exhausted state. Also surfaces low-priority status notes when rate-limit bursts occur.
 
@@ -1503,7 +1503,7 @@ vLLM is an open-source high-throughput LLM serving engine running local or self-
 - **Dynamic-Only Catalog Exclusion**: Included in `DISCOVERY_ONLY_PROVIDERS` (`scripts/generate-models.ts`) and `LOCAL_ONLY_PROVIDERS` (`test/models-json-no-local-endpoints.test.ts`). Local vLLM models are excluded from static catalog generation so machine-specific endpoints are never committed to `models.json`.
 
 ### Auth & usage
-- **Credential Resolution & Defaults**: Managed via `loginVllm` (`createApiKeyLogin` in `packages/ai/src/registry/vllm.ts`). Reads optional API keys from the `VLLM_API_KEY` environment variable or credentials stored via `omp auth-broker login vllm`.
+- **Credential Resolution & Defaults**: Managed via `loginVllm` (`createApiKeyLogin` in `packages/ai/src/registry/vllm.ts`). Reads optional API keys from the `VLLM_API_KEY` environment variable or credentials stored through `AuthStorage`/broker APIs.
 - **Unauthenticated Local Mode**: Defaults to base URL `http://127.0.0.1:8000/v1` and placeholder token `"vllm-local"` (`DEFAULT_LOCAL_TOKEN`) when no key is supplied (`emptyKeyFallback: "vllm-local"`). Descriptor settings specify `catalogDiscovery: { label: "vLLM", allowUnauthenticated: true }`.
 - **Documentation & Endpoint Setup**: The login helper points to `https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html` for configuring local vLLM OpenAI-compatible server endpoints.
 
@@ -1606,7 +1606,7 @@ Xiaomi MiMo delivers Xiaomi's proprietary MiMo model family (such as `mimo-v2.5`
 - **Host Matching**: `modelMatchesHost` (`packages/catalog/src/hosts.ts`) matches `xiaomi` provider IDs, `xiaomi-token-plan-` provider prefixes, and `xiaomimimo.com` URL markers to the `xiaomi` host class.
 
 ## Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`)
-Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`) provides regional access to Xiaomi's MiMo model family (such as `mimo-v2.5` and `mimo-v2-omni`) via Xiaomi's European Token Plan gateway (`https://token-plan-ams.xiaomimimo.com/v1`). It uses the OpenAI Chat Completions transport (`api: "openai-completions"`). This regional provider allows CLI login (`omp login`) and dynamic model lookup to store and validate `tp-` API keys against the European cluster without falling back across regions.
+Xiaomi Token Plan (Europe) (`xiaomi-token-plan-ams`) provides regional access to Xiaomi's MiMo model family (such as `mimo-v2.5` and `mimo-v2-omni`) via Xiaomi's European Token Plan gateway (`https://token-plan-ams.xiaomimimo.com/v1`). It uses the OpenAI Chat Completions transport (`api: "openai-completions"`). This regional provider uses the host login contract and dynamic model lookup to store and validate `tp-` API keys against the European cluster without falling back across regions.
 
 ### Special casings
 - **Host Matching & Extended Idle Timeout**: Matched under host class `xiaomi` via `providerPrefixes: ["xiaomi-token-plan-"]` in `packages/catalog/src/hosts.ts`. In `packages/catalog/src/compat/openai.ts`, `isXiaomiHost` matches, enabling `isXiaomiMimo` which configures `XIAOMI_MIMO_STREAM_IDLE_TIMEOUT_MS = 300_000` (5-minute stream idle watchdog) to accommodate initial response stalls on MiMo models.

@@ -116,7 +116,6 @@ describe("AgentSession advisor toggle", () => {
 		await fs.mkdir(dir, { recursive: true });
 		const manager = await SessionManager.open(path.join(dir, filename), undefined, undefined, {
 			initialCwd: dir,
-			suppressBreadcrumb: true,
 		});
 		try {
 			for (const [index, cost] of costs.entries()) manager.appendMessage(advisorMessage(cost, index + 1));

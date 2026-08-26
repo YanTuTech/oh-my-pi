@@ -75,13 +75,13 @@ Project-level bases:
 
 ## Profiles
 
-A named profile (`omp --profile <name>`, `OMP_PROFILE`, or the legacy fallback `PI_PROFILE`) relocates the OMP user base. `OMP_PROFILE` wins when it is defined, including when it is explicitly empty; `default`, empty, or whitespace selects the default profile. When a profile is active, every OMP-native user-level path written here as `~/.omp/agent/...` normally resolves to `~/.omp/profiles/<name>/agent/...`. `--alias <command>` does not select a profile by itself: paired with `--profile`, it creates a shell shortcut for that profile.
+A named profile (`OMP_PROFILE`, or the legacy fallback `PI_PROFILE`) relocates the OMP user base. `OMP_PROFILE` wins when it is defined, including when it is explicitly empty; `default`, empty, or whitespace selects the default profile. When a profile is active, every OMP-native user-level path written here as `~/.omp/agent/...` normally resolves to `~/.omp/profiles/<name>/agent/...`.
 
 The relocation is uniform across the native provider (`builtin.ts`) and the generic `config.ts` helpers, so it covers slash commands, rules, prompts, instructions, hooks, tools, extensions, settings, skills, and MCP, plus the top-level `SYSTEM.md` / `RULES.md` / `AGENTS.md` files and runtime state (sessions, blobs, `agent.db`). A profile sees only its own OMP config, never the default profile's agent config.
 
 Keybindings are the one exception: a named profile merges the default profile's `~/.omp/agent/keybindings.*` under its own `~/.omp/profiles/<name>/agent/keybindings.*`, with the profile file overriding per binding ([#4867](https://github.com/can1357/oh-my-pi/issues/4867)). Keybindings describe the terminal/keyboard in front of the user, which doesn't change with the active profile, so user-level remaps keep working in every profile unless the profile explicitly overrides them. The inherited file is read-only for the profile process — legacy-format migration of the default profile's file only happens when the default profile itself runs.
 
-On macOS and Linux, an existing `$XDG_DATA_HOME/omp`, `$XDG_STATE_HOME/omp`, or `$XDG_CACHE_HOME/omp` can relocate the corresponding data, state, or cache paths. For a named profile, OMP uses an XDG category only when that category already contains `omp/profiles/<name>`; otherwise that category remains under `~/.omp/profiles/<name>`. Run `omp config init-xdg` before relying on XDG paths.
+On macOS and Linux, an existing `$XDG_DATA_HOME/omp`, `$XDG_STATE_HOME/omp`, or `$XDG_CACHE_HOME/omp` can relocate the corresponding data, state, or cache paths. For a named profile, OMP uses an XDG category only when that category already contains `omp/profiles/<name>`; otherwise that category remains under `~/.omp/profiles/<name>`. The embedding host is responsible for provisioning XDG roots before relying on them.
 
 The other source bases are not profile-scoped and load identically under every profile: the external-tool bases (`~/.claude`, `~/.codex`, `~/.gemini`) belong to those tools, and the project-level bases (`<cwd>/.omp`, `<cwd>/.claude`, ...) are keyed to the working directory. Throughout this document, read `~/.omp/agent` as shorthand for the active profile's agent directory unless an environment override or XDG path is being discussed.
 
@@ -151,13 +151,13 @@ The runtime settings model is layered:
 
 1. Global settings: the first present file among `~/.omp/agent/config.yml` and `config.yaml`
 2. Project settings: discovered via the settings capability (`settings.json` and `config.yml` from providers)
-3. Config overlays: `PI_CONFIG_FILES` (platform path-list), followed by repeated `omp --config <path>` files; all are loaded as `config.yml`-style YAML for this process only
+3. Config overlays: `PI_CONFIG_FILES` (platform path-list); all are loaded as `config.yml`-style YAML for this process only
 4. Runtime overrides: in-memory, non-persistent
 5. Schema defaults: from `SETTINGS_SCHEMA`
 
 Effective precedence:
 
-`defaults <- global <- project <- PI_CONFIG_FILES overlays <- --config overlays <- runtime overrides`
+`defaults <- global <- project <- PI_CONFIG_FILES overlays <- runtime overrides`
 
 Within either overlay list, later files override earlier files. Overlay paths are resolved relative to the active project directory (after `~` expansion).
 
@@ -170,7 +170,7 @@ Write behavior:
 
 - Missing global/project YAML is treated as empty configuration.
 - Invalid global or native-project YAML is moved to a unique `.broken-<timestamp>-<pid>-<uuid>` sibling under a file lock, then startup fails with the original and backup paths. An unreadable file fails without being moved.
-- Every `PI_CONFIG_FILES` / `--config` overlay is strict: missing files, invalid YAML, and non-mapping document roots are hard errors. Overlay files are not quarantined.
+- Every `PI_CONFIG_FILES` overlay is strict: missing files, invalid YAML, and non-mapping document roots are hard errors. Overlay files are not quarantined.
 
 ## Migration behavior still active
 
@@ -184,7 +184,7 @@ Field-level migrations in `#migrateRawSettings`:
 
 - `queueMode` -> `steeringMode`
 - `ask.timeout` milliseconds -> seconds when old value looks like ms (`> 1000`)
-- Legacy flat `theme: "..."` -> `theme.dark/theme.light` structure
+- Legacy `tui.renderMermaid` -> `prompts.renderMermaid`; other retired terminal-application settings are removed
 
 ---
 
@@ -264,7 +264,7 @@ For `SYSTEM.md`, `RULES.md`, and `.omp/AGENTS.md`, the native provider walks upw
 
 ## Settings subsystem
 
-- `Settings.init()` loads the global YAML file, discovered project settings, `PI_CONFIG_FILES` / `--config` overlays, and runtime overrides in the precedence described above.
+- `Settings.init()` loads the global YAML file, discovered project settings, `PI_CONFIG_FILES` overlays, and runtime overrides in the precedence described above.
 - Only capability items with `level === "project"` are merged into the project layer.
 
 ### Session title prompt override

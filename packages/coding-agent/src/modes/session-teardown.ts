@@ -1,5 +1,5 @@
 /**
- * Signal-safe session teardown: persists the in-progress editor draft, then
+ * Signal-safe host teardown: persists an optional in-progress draft, then
  * disposes the session (which emits `session_shutdown`, cancels the session's
  * background async jobs, and closes the session manager). Shared by host-driven
  * shutdown and postmortem `SIGINT`/`SIGTERM`/`SIGHUP`/`uncaughtException`
@@ -12,7 +12,7 @@ import { logger, type postmortem } from "@oh-my-pi/pi-utils";
 
 /** Dependencies the teardown captures at construction time. */
 export interface SessionTeardownDeps {
-	/** Snapshot the current editor text; called once, before disposal touches session state. */
+	/** Snapshot host-owned draft text; called once, before disposal touches session state. */
 	getDraftText: () => string;
 	/**
 	 * Synchronously mark the session as disposing before any awaited teardown
@@ -28,7 +28,7 @@ export interface SessionTeardownDeps {
 	/**
 	 * Dispose the session — emits `session_shutdown`, drains async jobs, closes
 	 * the manager. Receives the postmortem reason that triggered the teardown
-	 * (undefined on the keypress/`/exit` path) so `AgentSession.dispose()` can
+	 * (undefined on a normal host-initiated path) so `AgentSession.dispose()` can
 	 * persist the real exit reason instead of the generic `"dispose"`.
 	 */
 	disposeSession: (reason?: postmortem.Reason) => Promise<void>;
@@ -45,7 +45,7 @@ export type SessionTeardown = (reason?: postmortem.Reason) => Promise<void>;
 /**
  * Build a promise-memoized teardown function. The first call snapshots the
  * draft text, marks the session disposing synchronously, runs `saveDraft`
- * (draft-loss protection for `--resume`), then `disposeSession`; subsequent
+ * (draft-loss protection for host resume), then `disposeSession`; subsequent
  * calls await the same settled promise, so host shutdown and the postmortem
  * signal callback cannot
  * double-emit `session_shutdown`, double-dispose the session's async-job

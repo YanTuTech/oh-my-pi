@@ -169,7 +169,6 @@ export class AdvisorTranscriptRecorder {
 				await this.#closeManager();
 				this.#manager = await SessionManager.open(file, undefined, undefined, {
 					initialCwd: cwd,
-					suppressBreadcrumb: true,
 				});
 				this.#file = file;
 			}

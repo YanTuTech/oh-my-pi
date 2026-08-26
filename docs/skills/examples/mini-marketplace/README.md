@@ -9,13 +9,6 @@ A minimal `oh-my-pi` marketplace catalog that demonstrates the `marketplace.json
 /marketplace install my-plugin@example-marketplace
 ```
 
-Or from the CLI:
-
-```
-omp plugin marketplace add ./docs/skills/examples/mini-marketplace
-omp plugin install my-plugin@example-marketplace
-```
-
 ## What it demonstrates
 
 - Minimum required `marketplace.json` fields: `name`, `owner.name`, `plugins`
@@ -31,7 +24,7 @@ mini-marketplace/
     marketplace.json      ← catalog
   README.md
   my-plugin/
-    package.json          ← omp.extensions manifest
+    package.json          ← Runtime extension manifest
     index.ts              ← extension entry point
 ```
 

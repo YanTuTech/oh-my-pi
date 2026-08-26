@@ -4,16 +4,10 @@ Vibe mode turns the top-level Agent Runtime session into a **director** for pers
 
 ## Enabling and disabling
 
-Toggle it with the `/vibe` slash command:
-
-```text
-/vibe                 # enter vibe mode
-/vibe fix the flaky test in packages/agent   # enter and submit a first directive
-/vibe                 # run again to exit
-```
+Embedding hosts toggle the session's `VibeModeState` through the Runtime session API and submit the first directive through the normal prompt surface.
 
 - Entering activates a parent-session worker scope, installs the vibe tools, reduces the active toolset to `read`, optional parent-owned `todo`, and the vibe tools, and injects the director instructions.
-- An inline prompt (`/vibe <prompt>`) enters the mode and submits that prompt as the first directive.
+- A host may enter the mode and submit the first directive in one operation.
 - Exiting restores the prior toolset, cancels in-flight worker turns, kills every worker session in the scope, and persists terminal lifecycle records. A worker never outlives an intentional mode exit.
 - Vibe mode is mutually exclusive with both active **and paused** plan/goal modes; exit those modes first.
 - Starting, forking, moving, or handing off the session is rejected while vibe mode is active.

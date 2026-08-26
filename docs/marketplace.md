@@ -15,7 +15,7 @@ In ACP/RPC command handling, `/marketplace` lists configured marketplaces; use `
 
 A **marketplace** is a Git repository (or local directory) containing a catalog file at `.omp-plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json` (Claude Code-compatible fallback). The catalog lists available plugins with their sources, descriptions, and metadata.
 
-A **plugin** is a directory containing Claude/OMP plugin content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Marketplace installs also load extension modules declared by `package.json` `omp.extensions`: installation symlinks the cached plugin into the scope's `node_modules` tree and records it in `omp-plugins.lock.json`, the same runtime surfaces used by npm-installed and `omp plugin link`ed plugins. Plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
+A **plugin** is a directory containing Claude/OMP plugin content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Marketplace installs also load extension modules declared by `package.json` `omp.extensions`: installation symlinks the cached plugin into the scope's `node_modules` tree and records it in `omp-plugins.lock.json`, the same runtime surfaces used by npm-installed and linked plugins. Plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
 
 **Scopes**: marketplace plugins can be installed at two scopes:
 
@@ -24,7 +24,7 @@ A **plugin** is a directory containing Claude/OMP plugin content such as skills,
 
 Enabled project-scoped installs shadow enabled user-scoped installs of the same plugin. A disabled project install does not shadow the user install.
 
-On Linux and macOS, `omp config init-xdg` creates the XDG data, state, and cache roots; it does not move existing data. Once the relevant roots exist and `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` are set, new user marketplace/plugin state resolves under `$XDG_DATA_HOME/omp` (including `marketplaces.json` and `plugins/`). The `~/.omp` paths below are the non-XDG defaults.
+On Linux and macOS, a host may provision the XDG data, state, and cache roots; this does not move existing data. Once the relevant roots exist and `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` are set, new user marketplace/plugin state resolves under `$XDG_DATA_HOME/omp` (including `marketplaces.json` and `plugins/`). The `~/.omp` paths below are the non-XDG defaults.
 
 ## Commands
 
@@ -188,9 +188,8 @@ Invalid catalog JSON or invalid required top-level fields reject the catalog. An
 ## Updates, removal, and scope
 
 - `/marketplace update [name]` refreshes catalogs only; it does not reinstall plugins.
-- `omp plugin upgrade name@marketplace` reinstalls every installed scope when `--scope` is omitted. `/marketplace upgrade name@marketplace`, uninstall, and enable/disable require `--scope user|project` when the plugin exists in both scopes.
+- `/marketplace upgrade name@marketplace` reinstalls every installed scope when `--scope` is omitted. Upgrade, uninstall, and enable/disable require `--scope user|project` when the plugin exists in both scopes.
 - Upgrading all plugins compares only catalog entries that declare `version`. Semver versions must be newer; non-semver versions are treated as changed when unequal. Per-plugin failures are skipped, so an all-plugin upgrade can partially succeed.
-- `marketplace.autoUpdate` controls startup checks: `off`, `notify` (default), or `auto`. Catalogs older than 24 hours are refreshed best-effort before version checks. Despite its name, current `notify` mode writes update availability only to the debug log; it does not show a user-facing notification.
 - Removing a marketplace removes its registry entry and catalog cache; it does not uninstall plugins already cached and registered.
 
 ## On-disk layout

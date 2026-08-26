@@ -1,7 +1,7 @@
 # pi-native auth-gateway transport
 
 `pi-native` is the lossless transport between a pi-ai client and an
-`omp auth-gateway`. It is **not a textual tool-call dialect**: there is no
+a compatible Runtime auth gateway. It is **not a textual tool-call dialect**: there is no
 `<call:NAME>` grammar, parser, renderer, or `PI_DIALECT=pi-native` value in the
 current implementation. Tool calls remain canonical pi-ai `ToolCall` content
 blocks inside `Context` and `AssistantMessageEvent`.
@@ -22,7 +22,7 @@ transport: pi-native
 baseUrl: http://gateway.internal:4000
 ```
 
-`baseUrl` MUST identify an `omp auth-gateway` (or compatible service). Missing
+`baseUrl` MUST identify a compatible Runtime auth gateway. Missing
 `baseUrl` fails with:
 
 ```text

@@ -68,12 +68,7 @@ import {
 	visitEntriesFromFile,
 } from "./session-loader";
 import { generateId, migrateToCurrentVersion } from "./session-migrations";
-import {
-	computeDefaultSessionDir,
-	readTerminalBreadcrumbEntry,
-	resolveManagedSessionRoot,
-	writeTerminalBreadcrumb,
-} from "./session-paths";
+import { computeDefaultSessionDir, resolveManagedSessionRoot } from "./session-paths";
 import { prepareEntryForPersistence } from "./session-persistence";
 import { loadPinnedSessionIds, sortPinnedFirst } from "./session-pins";
 import {
@@ -132,27 +127,6 @@ export async function copySessionArtifacts(sourceSessionFile: string, destinatio
 			});
 		}
 	}
-}
-
-/**
- * Resolve a breadcrumb's recorded session file to its interactive root. Subagent
- * (and other artifact) sessions live inside a parent session's artifacts dir —
- * `<parent>.jsonl` strips its suffix to `<parent>/`, and a child writes
- * `<parent>/<agentId>.jsonl`. A breadcrumb that points at such a child — a
- * pre-fix poisoned crumb left by a subagent that opened in the parent's TTY, or
- * any nested artifact — must resolve back up to the top-level session so
- * `--continue` resumes the real conversation instead of a subagent transcript.
- */
-function resolveBreadcrumbToInteractiveRoot(sessionFile: string): string {
-	let current = path.resolve(sessionFile);
-	// Walk up while the containing dir is itself a session's artifacts dir
-	// (`<dir>.jsonl` exists). Capped to defend against pathological layouts.
-	for (let depth = 0; depth < 8; depth++) {
-		const parentSessionFile = `${path.dirname(current)}.jsonl`;
-		if (!fs.existsSync(parentSessionFile)) return current;
-		current = parentSessionFile;
-	}
-	return current;
 }
 
 function emptyUsageStatistics(): UsageStatistics {
@@ -541,14 +515,6 @@ export class SessionManager {
 	#inMemoryArtifacts: Map<string, string> | null = null;
 	#inMemoryArtifactCounter = 0;
 
-	#suppressBreadcrumb = false;
-	/**
-	 * The last breadcrumb this manager wrote marked a lazy `/new` boundary whose
-	 * JSONL is not yet on disk. Cleared (and the crumb re-stamped non-fresh) once
-	 * the session materializes, so a materialized-then-deleted session still falls
-	 * back to the most-recent session instead of being treated as a fresh crumb.
-	 */
-	#breadcrumbFresh = false;
 	#sessionNameChangedCallbacks = new Set<() => void>();
 	#persistenceErrorCallbacks = new Set<(error: Error) => void>();
 
@@ -560,20 +526,6 @@ export class SessionManager {
 		this.#blobs = new BlobStore(getBlobsDir());
 
 		if (persist && sessionDir) this.#storage.ensureDirSync(sessionDir);
-	}
-
-	#rememberBreadcrumb(cwd: string, sessionFile: string, fresh = false): void {
-		this.#breadcrumbFresh = fresh;
-		if (!this.#suppressBreadcrumb) writeTerminalBreadcrumb(cwd, sessionFile, fresh);
-	}
-
-	/**
-	 * Re-stamp a fresh `/new` breadcrumb as non-fresh once the session has
-	 * materialized on disk. A no-op unless the current breadcrumb is still fresh.
-	 */
-	#materializeBreadcrumb(): void {
-		if (!this.#breadcrumbFresh || !this.#sessionFile) return;
-		this.#rememberBreadcrumb(this.#cwd, this.#sessionFile, false);
 	}
 
 	#clearDiskError(): void {
@@ -864,7 +816,6 @@ export class SessionManager {
 			// still the pre-repoint source until moveTo repoints it.
 			if (!this.#sessionFileRelocating || targetPath === this.#sessionFile) {
 				this.#fileIsCurrent = true;
-				this.#materializeBreadcrumb();
 				this.#rewriteRequired = false;
 				this.#hasTitleSlot = true;
 			} else {
@@ -898,7 +849,6 @@ export class SessionManager {
 			async () => {
 				if (await this.#runFencedAtomicRewrite(startEpoch)) {
 					this.#fileIsCurrent = true;
-					this.#materializeBreadcrumb();
 					this.#rewriteRequired = false;
 					this.#hasTitleSlot = true;
 				}
@@ -1136,7 +1086,6 @@ export class SessionManager {
 			this.#sessionFile =
 				forcedSessionFile ??
 				path.join(this.#sessionDir, `${fileSafeTimestamp(timestamp)}_${this.#sessionId}.jsonl`);
-			this.#rememberBreadcrumb(this.#cwd, this.#sessionFile, true);
 		} else {
 			this.#sessionFile = undefined;
 		}
@@ -1310,7 +1259,6 @@ export class SessionManager {
 	cloneCurrentSession(options?: { persist?: boolean }): SessionManager {
 		const persist = options?.persist ?? this.#persist;
 		const clone = new SessionManager(this.#cwd, this.#sessionDir, persist, this.#storage);
-		clone.#suppressBreadcrumb = true;
 		clone.restoreState(this.captureState());
 		if (!persist) {
 			clone.#sessionFile = undefined;
@@ -1342,8 +1290,6 @@ export class SessionManager {
 		this.#artifactManager = null;
 		this.#artifactManagerSessionFile = null;
 		this.#adoptedArtifactManager = null;
-
-		if (this.#sessionFile) this.#rememberBreadcrumb(this.#cwd, this.#sessionFile);
 	}
 
 	/** Switch to a different session file (resume / branch). */
@@ -1358,7 +1304,6 @@ export class SessionManager {
 
 		const resolvedSessionFile = path.resolve(sessionFile);
 		this.#sessionFile = resolvedSessionFile;
-		this.#rememberBreadcrumb(this.#cwd, resolvedSessionFile);
 
 		const loaded = loadedSession ?? (await loadSessionFile(resolvedSessionFile, this.#storage));
 		const { entries: fileEntries, titleSlot } = loaded;
@@ -1387,7 +1332,6 @@ export class SessionManager {
 		if (headerCwd && headerCwd !== path.resolve(this.#cwd) && (await directoryExists(headerCwd))) {
 			this.#cwd = headerCwd;
 			this.#sessionDir = path.dirname(resolvedSessionFile);
-			this.#rememberBreadcrumb(this.#cwd, resolvedSessionFile);
 		}
 
 		this.#applyEntries(header, fileEntries.slice(1) as SessionEntry[]);
@@ -1456,7 +1400,6 @@ export class SessionManager {
 		this.#draftOnlySessionCleanupArmed = false;
 		this.#artifactManager = null;
 		this.#artifactManagerSessionFile = null;
-		this.#rememberBreadcrumb(this.#cwd, this.#sessionFile);
 
 		await this.#rewriteAtomically();
 		return { oldSessionFile, newSessionFile: this.#sessionFile };
@@ -1588,8 +1531,6 @@ export class SessionManager {
 				this.#forceFileCreation = true;
 				await this.#rewriteAtomically();
 			}
-
-			if (this.#sessionFile) this.#rememberBreadcrumb(resolvedCwd, this.#sessionFile);
 		} finally {
 			this.#sessionFileRelocating = null;
 		}
@@ -1608,12 +1549,15 @@ export class SessionManager {
 
 	/** Persist this session's transcript as a newly identified OMP session. */
 	async persistCopy(
-		options?: { sessionDir?: string; suppressBreadcrumb?: boolean },
+		options?: {
+			sessionDir?: string;
+			/** @deprecated Retained as an ignored source-compatibility option. */
+			suppressBreadcrumb?: boolean;
+		},
 		storage: SessionStorage = new FileSessionStorage(),
 	): Promise<SessionManager> {
 		const sessionDir = options?.sessionDir ?? SessionManager.getDefaultSessionDir(this.#cwd, undefined, storage);
 		const manager = new SessionManager(this.#cwd, sessionDir, true, storage);
-		manager.#suppressBreadcrumb = options?.suppressBreadcrumb === true;
 		manager.#resetToNewSession();
 		manager.#sessionName = this.#sessionName;
 		manager.#titleSource = this.#titleSource;
@@ -2614,7 +2558,6 @@ export class SessionManager {
 
 		this.#sessionFile = newSessionFile;
 		this.#rewriteSynchronously();
-		this.#rememberBreadcrumb(this.#cwd, newSessionFile);
 		return newSessionFile;
 	}
 
@@ -2675,11 +2618,15 @@ export class SessionManager {
 		cwd: string,
 		sessionDir?: string,
 		storage: SessionStorage = new FileSessionStorage(),
-		options?: { copyArtifacts?: boolean; suppressBreadcrumb?: boolean; sessionFile?: string },
+		options?: {
+			copyArtifacts?: boolean;
+			sessionFile?: string;
+			/** @deprecated Retained as an ignored source-compatibility option. */
+			suppressBreadcrumb?: boolean;
+		},
 	): Promise<SessionManager> {
 		const dir = sessionDir ?? SessionManager.getDefaultSessionDir(cwd, undefined, storage);
 		const manager = new SessionManager(cwd, dir, true, storage);
-		manager.#suppressBreadcrumb = options?.suppressBreadcrumb === true;
 
 		const sourceEntries = structuredClone(await loadEntriesFromFile(sourcePath, storage)) as FileEntry[];
 		migrateToCurrentVersion(sourceEntries);
@@ -2723,7 +2670,11 @@ export class SessionManager {
 		filePath: string,
 		sessionDir?: string,
 		storage: SessionStorage = new FileSessionStorage(),
-		options?: { initialCwd?: string; suppressBreadcrumb?: boolean },
+		options?: {
+			initialCwd?: string;
+			/** @deprecated Retained as an ignored source-compatibility option. */
+			suppressBreadcrumb?: boolean;
+		},
 	): Promise<SessionManager> {
 		const loaded = await loadSessionFile(filePath, storage);
 		const header = loaded.entries.find(entry => entry.type === "session") as SessionHeader | undefined;
@@ -2741,7 +2692,6 @@ export class SessionManager {
 				? SessionManager.getDefaultSessionDir(cwd, undefined, storage)
 				: path.dirname(path.resolve(filePath)));
 		const manager = new SessionManager(cwd, dir, true, storage);
-		manager.#suppressBreadcrumb = options?.suppressBreadcrumb === true;
 		await manager.#setSessionFile(filePath, loaded);
 		return manager;
 	}
@@ -2829,74 +2779,7 @@ export class SessionManager {
 		storage: SessionStorage = new FileSessionStorage(),
 	): Promise<SessionManager> {
 		const dir = sessionDir ?? SessionManager.getDefaultSessionDir(cwd, undefined, storage);
-		const resolvedCwd = path.resolve(cwd);
-		const breadcrumb = await readTerminalBreadcrumbEntry();
-		let chosenSession: string | null | undefined;
-
-		if (breadcrumb) {
-			// A fresh `/new` boundary whose JSONL was never materialized (lazy
-			// new-session persistence, then a process exit before any assistant
-			// output). Honor the boundary: start fresh rather than falling back to
-			// findMostRecentSession(), which would resurrect the pre-`/new`
-			// transcript. A materialized (or genuinely stale/deleted) crumb reports
-			// exists=false only when fresh, so this never masks a real stale crumb.
-			if (breadcrumb.fresh && !breadcrumb.exists) {
-				const manager = new SessionManager(cwd, dir, true, storage);
-				manager.#resetToNewSession();
-				return manager;
-			}
-
-			// Recover stale crumbs: a subagent open (pre-fix) may have pointed this
-			// terminal's breadcrumb at an artifact child; resume the parent instead.
-			breadcrumb.sessionFile = resolveBreadcrumbToInteractiveRoot(breadcrumb.sessionFile);
-			const breadcrumbCwd = path.resolve(breadcrumb.cwd);
-			if (breadcrumbCwd === resolvedCwd) {
-				chosenSession = breadcrumb.sessionFile;
-			} else {
-				// The terminal's last session started in a different cwd. If that cwd is
-				// gone (worktree move/rename) and this location has no sessions of its
-				// own, re-root the moved session here instead of starting fresh. When an
-				// explicit sessionDir is reused across the move, the stale breadcrumb file
-				// may be the newest entry there; prefer a genuine current-cwd session.
-				let newestInTargetDir = await findMostRecentSession(dir, storage);
-				const breadcrumbFile = path.resolve(breadcrumb.sessionFile);
-				const breadcrumbCwdMissing = !fs.existsSync(breadcrumbCwd);
-				const newestIsBreadcrumb = newestInTargetDir ? path.resolve(newestInTargetDir) === breadcrumbFile : false;
-				let currentProjectAlreadyHasSession = false;
-
-				if (breadcrumbCwdMissing && newestIsBreadcrumb) {
-					const localSession = (await SessionManager.list(cwd, dir, storage)).find(
-						session =>
-							path.resolve(session.path) !== breadcrumbFile &&
-							session.cwd &&
-							path.resolve(session.cwd) === resolvedCwd,
-					);
-					if (localSession) {
-						newestInTargetDir = localSession.path;
-						currentProjectAlreadyHasSession = true;
-					}
-				}
-
-				const looksLikeMovedProject =
-					breadcrumbCwdMissing &&
-					(newestInTargetDir === null || (newestIsBreadcrumb && !currentProjectAlreadyHasSession));
-				if (looksLikeMovedProject) {
-					logger.info("Re-rooting moved session", { from: breadcrumbCwd, to: resolvedCwd });
-					// Anchor at the gone breadcrumb cwd so the moveTo below relocates the
-					// session: open() now falls back to the launch cwd for a missing
-					// recorded cwd, which would no-op moveTo when it equals `cwd`.
-					const manager = await SessionManager.open(breadcrumb.sessionFile, undefined, storage, {
-						initialCwd: breadcrumbCwd,
-					});
-					await manager.moveTo(cwd, sessionDir);
-					return manager;
-				}
-
-				chosenSession = newestInTargetDir;
-			}
-		}
-
-		if (chosenSession === undefined) chosenSession = await findMostRecentSession(dir, storage);
+		const chosenSession = await findMostRecentSession(dir, storage);
 
 		const manager = new SessionManager(cwd, dir, true, storage);
 		if (chosenSession) await manager.setSessionFile(chosenSession);

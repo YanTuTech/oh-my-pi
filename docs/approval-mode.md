@@ -21,7 +21,7 @@ Configure with `tools.approvalMode`:
 | `write`          | `read`, `write`         | `exec`          |
 | `yolo` (default) | `read`, `write`, `exec` | none            |
 
-`--auto-approve` and `--yolo` force `tools.approvalMode: yolo` for the session.
+The Runtime RPC host's `--auto-approve` option forces `tools.approvalMode: yolo` for that process.
 
 ## User overrides
 
@@ -121,7 +121,7 @@ approval: (args) =>
 
 ## ACP sessions
 
-ACP (`omp acp`) uses the same settings resolver as normal OMP launches. Global `~/.omp/agent/config.yml` applies, project config for the ACP session `cwd` applies, and any `--config <file>` overlays passed to the ACP server process apply to sessions created by that process.
+The Runtime ACP host uses the normal settings resolver. Global `~/.omp/agent/config.yml` and project config for the ACP session `cwd` apply to sessions created by that process.
 
 To auto-approve ACP tool calls, set the mode in global or project config:
 
@@ -130,18 +130,9 @@ tools:
   approvalMode: yolo
 ```
 
-Or launch the ACP server with a runtime override or a one-process config overlay:
+An embedding application that needs a different policy per process should supply an isolated agent/config directory or construct the ACP session factory with host-owned settings. ACP does not currently define a `session/new`, `session/load`, or `session/resume` approval-policy field.
 
-```bash
-omp acp --yolo
-omp acp --auto-approve
-omp acp --approval-mode yolo
-omp acp --config ./acp-yolo.yml   # file contains tools.approvalMode: yolo
-```
-
-Precedence is the normal settings precedence: runtime flags (`--approval-mode`, `--auto-approve`, `--yolo`) override `--config` overlays, which override project config, which overrides global config. ACP does not currently define a `session/new`, `session/load`, or `session/resume` approval-policy field, so ACP clients that need per-session yolo should launch a separate `omp acp` process with one of the flags above or with a session-specific `--config` overlay.
-
-`tools.approvalMode: yolo` fully applies to ACP when it is explicitly configured or supplied by a runtime flag. It skips OMP's approval prompts and also skips the ACP client permission gate for `bash`, `edit`, `delete`, and `move` unless `tools.approval.<tool>` is `prompt` or `deny`. The schema default is `yolo`, but default-config ACP sessions still keep the client permission gate; set `tools.approvalMode: yolo` explicitly when the client wants unattended execution.
+`tools.approvalMode: yolo` fully applies to ACP when it is explicitly configured. It skips Runtime approval prompts and also skips the ACP client permission gate for `bash`, `edit`, `delete`, and `move` unless `tools.approval.<tool>` is `prompt` or `deny`. The schema default is `yolo`, but default-config ACP sessions still keep the client permission gate; set `tools.approvalMode: yolo` explicitly when the client wants unattended execution.
 
 When ACP approval is required, OMP routes it through the ACP client. Client-gated `bash`, `edit`, `delete`, and `move` calls use ACP `session/request_permission`; generic approval prompts use form elicitation when the client advertises `elicitation.form`. A rejected, cancelled, or unsupported prompt rejects/cancels the tool call; OMP does not silently allow it.
 

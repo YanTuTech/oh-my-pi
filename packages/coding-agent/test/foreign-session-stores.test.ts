@@ -339,13 +339,11 @@ describe("foreign session persistence", () => {
 		const { info, store } = await createClaudeFixture();
 		const sessionDir = path.join(tempRoot, "omp-sessions");
 
-		const persisted = await persistForeignSession(store, info, { sessionDir, suppressBreadcrumb: true });
+		const persisted = await persistForeignSession(store, info, { sessionDir });
 		const sessionFile = persisted.getSessionFile();
 		if (!sessionFile) throw new Error("Imported session was not persisted");
 		await persisted.close();
-		const reopened = await SessionManager.open(sessionFile, sessionDir, new FileSessionStorage(), {
-			suppressBreadcrumb: true,
-		});
+		const reopened = await SessionManager.open(sessionFile, sessionDir, new FileSessionStorage());
 		try {
 			expect(reopened.getSessionId()).not.toBe(info.id);
 			expect(reopened.getSessionName()).toBe("Imported Claude");

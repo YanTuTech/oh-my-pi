@@ -1,7 +1,6 @@
 import type { AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import { sanitizeText } from "@oh-my-pi/pi-utils";
 import { formatBytes } from "../tools/render-utils";
-import { sanitizeWithOptionalSixelPassthrough } from "../utils/sixel";
 
 // =============================================================================
 // Constants
@@ -852,7 +851,7 @@ export class OutputSink {
 	 */
 	push(chunk: string): void {
 		if (this.#finalized) return;
-		chunk = sanitizeWithOptionalSixelPassthrough(chunk, text => sanitizeText(this.#normalizeCarriageReturns(text)));
+		chunk = sanitizeText(this.#normalizeCarriageReturns(chunk));
 
 		// Throttled onChunk: coalesce chunks arriving inside the throttle window.
 		// A timer flushes quiet tails at the throttle boundary; dump() catches a

@@ -308,9 +308,9 @@ Generated declarations currently include exports from these Rust modules:
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Search/workspace       | `grep`, `search`, `hasMatch`, `fuzzyFind`, `glob`, `listWorkspace`, `invalidateFsScanCache`                                             | `grep.rs`, `fd.rs`, `glob.rs`, `workspace.rs`, `iofs.rs`                     |
 | AST/block/summary      | `astGrep`, `astEdit`, `blockRangeAt`, `summarizeCode`                                                                                   | `ast.rs`, `block.rs`, `summary.rs`                                           |
-| Text/highlight/tokens  | `visibleWidth`, `truncateToWidth`, `highlightCode`, `countTokens`                                                                       | `text.rs`, `highlight.rs`, `tokens.rs`                                       |
-| Shell/PTY/process/keys | `executeShell`, `Shell`, `PtySession`, `Process`, `parseKey`                                                                            | `shell.rs`, `pty.rs`, `ps.rs`, `keys.rs`                                     |
-| Media/system/iso       | `encodeSixel`, `copyToClipboard`, `detectMacOSAppearance`, `MacOSPowerAssertion`, `getWorkProfile`, `isoBackend`, `isoStart`, `isoDiff` | `sixel.rs`, `clipboard.rs`, `appearance.rs`, `power.rs`, `prof.rs`, `iso.rs` |
+| Text/tokens            | `visibleWidth`, `truncateToWidth`, `countTokens`                                                                                        | `text.rs`, `tokens.rs`                                                       |
+| Shell/PTY/process      | `executeShell`, `Shell`, `PtySession`, `Process`                                                                                       | `shell.rs`, `pty.rs`, `ps.rs`                                                |
+| Media/system/iso       | `copyToClipboard`, `MacOSPowerAssertion`, `getWorkProfile`, `isoBackend`, `isoStart`, `isoDiff`                                        | `clipboard.rs`, `power.rs`, `prof.rs`, `iso.rs`                             |
 
 ## Failure behavior and diagnostics
 

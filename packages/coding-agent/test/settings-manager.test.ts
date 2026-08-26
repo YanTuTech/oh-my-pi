@@ -10,7 +10,6 @@ import {
 	onAppendOnlyModeChanged,
 	onCodeModeChanged,
 	onModelRolesChanged,
-	onStatusLineSessionAccentChanged,
 	resetSettingsForTest,
 	type SettingPath,
 	Settings,
@@ -229,7 +228,7 @@ describe("Settings", () => {
 			const corrupted = 'auth:\n  broker:\n    token: TOP-SECRET\nmodelRoles:\n  default: "unterminated\n';
 			await Bun.write(getConfigPath(), corrupted);
 
-			settings.set("theme.dark", "anthracite");
+			settings.set("personality", "friendly");
 			await expect(settings.flush()).rejects.toThrow("Settings config is invalid");
 
 			expect(await Bun.file(getConfigPath()).exists()).toBe(false);
@@ -242,7 +241,7 @@ describe("Settings", () => {
 			expect(await readSettings()).toEqual({
 				auth: { broker: { token: "TOP-SECRET" } },
 				modelRoles: { default: "keep/default" },
-				theme: { dark: "anthracite" },
+				personality: "friendly",
 			});
 			expect(await Bun.file(backupPath).text()).toBe(corrupted);
 			expect(fs.readdirSync(agentDir).some(name => name.endsWith(".tmp"))).toBe(false);
@@ -327,7 +326,7 @@ describe("Settings", () => {
 			);
 			await Bun.write(getConfigPath(), original);
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			settings.set("theme.dark", "anthracite");
+			settings.set("personality", "friendly");
 			const readSpy = vi.spyOn(fs.promises, "readFile");
 			readSpy.mockRejectedValueOnce(new FsCodeError("EIO", "injected read failure"));
 
@@ -340,7 +339,7 @@ describe("Settings", () => {
 			expect(await readSettings()).toEqual({
 				auth: { broker: { token: "TOP-SECRET" } },
 				modelRoles: { default: "keep/default" },
-				theme: { dark: "anthracite" },
+				personality: "friendly",
 			});
 		});
 
@@ -546,13 +545,13 @@ describe("Settings", () => {
 	describe("get()", () => {
 		it("resolves overrides, schema defaults, and falsey values", () => {
 			const isolated = Settings.isolated({
-				"display.showTokenUsage": false,
+				"images.blockImages": false,
 				setupVersion: 0,
 				shellPath: "",
 				enabledModels: [],
 			});
 
-			expect(isolated.get("display.showTokenUsage")).toBe(false);
+			expect(isolated.get("images.blockImages")).toBe(false);
 			expect(isolated.get("setupVersion")).toBe(0);
 			expect(isolated.get("shellPath")).toBe("");
 			expect(isolated.get("enabledModels")).toEqual([]);
@@ -561,15 +560,15 @@ describe("Settings", () => {
 		it("invalidates cached resolved values after set, override, and clearOverride", () => {
 			const isolated = Settings.isolated();
 
-			expect(isolated.get("display.showTokenUsage")).toBe(false);
-			isolated.set("display.showTokenUsage", true);
-			expect(isolated.get("display.showTokenUsage")).toBe(true);
+			expect(isolated.get("images.blockImages")).toBe(false);
+			isolated.set("images.blockImages", true);
+			expect(isolated.get("images.blockImages")).toBe(true);
 
-			isolated.override("display.showTokenUsage", false);
-			expect(isolated.get("display.showTokenUsage")).toBe(false);
+			isolated.override("images.blockImages", false);
+			expect(isolated.get("images.blockImages")).toBe(false);
 
-			isolated.clearOverride("display.showTokenUsage");
-			expect(isolated.get("display.showTokenUsage")).toBe(true);
+			isolated.clearOverride("images.blockImages");
+			expect(isolated.get("images.blockImages")).toBe(true);
 		});
 
 		it("re-resolves path-scoped arrays when cwd changes", async () => {
@@ -616,38 +615,6 @@ describe("Settings", () => {
 		});
 	});
 
-	describe("statusLine.sessionAccent hooks", () => {
-		it("notifies subscribers only when the effective value changes", () => {
-			const isolated = Settings.isolated();
-			const values: boolean[] = [];
-			const unsubscribe = onStatusLineSessionAccentChanged(() => {
-				values.push(isolated.get("statusLine.sessionAccent"));
-			});
-
-			try {
-				isolated.set("statusLine.sessionAccent", true);
-				expect(values).toEqual([]);
-
-				isolated.set("statusLine.sessionAccent", false);
-				expect(values).toEqual([false]);
-
-				isolated.override("statusLine.sessionAccent", false);
-				expect(values).toEqual([false]);
-
-				isolated.override("statusLine.sessionAccent", true);
-				expect(values).toEqual([false, true]);
-
-				isolated.clearOverride("statusLine.sessionAccent");
-				expect(values).toEqual([false, true, false]);
-			} finally {
-				unsubscribe();
-			}
-
-			isolated.set("statusLine.sessionAccent", true);
-			expect(values).toEqual([false, true, false]);
-		});
-	});
-
 	describe("provider.appendOnlyContext hooks", () => {
 		it("isolates a throwing listener so the rest still receive the value", () => {
 			const isolated = Settings.isolated();
@@ -674,17 +641,14 @@ describe("Settings", () => {
 	describe("preserves externally added settings", () => {
 		it("should preserve enabledModels when changing thinking level", async () => {
 			// Seed initial settings in config.yml
-			await writeSettings({
-				theme: "dark",
-				modelRoles: { default: "claude-sonnet" },
-			});
+			await writeSettings({ modelRoles: { default: "claude-sonnet" } });
 
 			// Settings loads the initial state
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			// Simulate external edit (e.g., user modifying DB directly or another process)
 			await writeSettings({
-				theme: { dark: "anthracite" },
+				personality: "friendly",
 				modelRoles: { default: "claude-sonnet" },
 				enabledModels: ["claude-opus-4-5", "gpt-5.2-codex"],
 			});
@@ -696,19 +660,19 @@ describe("Settings", () => {
 			const savedSettings = await readSettings();
 			expect(savedSettings.enabledModels).toEqual(["claude-opus-4-5", "gpt-5.2-codex"]);
 			expect(savedSettings.defaultThinkingLevel).toBe(Effort.High);
-			expect(savedSettings.theme).toEqual({ dark: "anthracite" });
+			expect(savedSettings.personality).toBe("friendly");
 			expect((savedSettings.modelRoles as { default?: string } | undefined)?.default).toBe("claude-sonnet");
 		});
 
-		it("persists native terminal progress only after the user changes it", async () => {
+		it("persists a Runtime setting only after the user changes it", async () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 			expect(await readSettings()).toEqual({});
 
-			settings.set("terminal.showProgress", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 
 			const savedSettings = await readSettings();
-			expect(savedSettings.terminal).toEqual({ showProgress: true });
+			expect(savedSettings.images).toEqual({ blockImages: true });
 		});
 
 		it("filters model allow-list and disabled providers by current path prefix", async () => {
@@ -740,7 +704,7 @@ describe("Settings", () => {
 			expect(privateSettings.get("disabledProviders")).toEqual(["ollama", "anthropic"]);
 		});
 
-		it("should preserve custom settings when changing theme", async () => {
+		it("should preserve custom settings when changing a Runtime preference", async () => {
 			await writeSettings({
 				modelRoles: { default: "claude-sonnet" },
 			});
@@ -753,24 +717,22 @@ describe("Settings", () => {
 				extensions: ["/path/to/extension.ts"],
 			});
 
-			settings.set("theme.dark", "anthracite");
+			settings.set("personality", "friendly");
 			await settings.flush();
 
 			const savedSettings = await readSettings();
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
 			expect(savedSettings.extensions).toEqual(["/path/to/extension.ts"]);
-			expect(savedSettings.theme).toEqual({ dark: "anthracite" });
+			expect(savedSettings.personality).toBe("friendly");
 		});
 
 		it("should let in-memory changes override file changes for same key", async () => {
-			await writeSettings({
-				theme: { dark: "anthracite" },
-			});
+			await writeSettings({ personality: "friendly" });
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			await writeSettings({
-				theme: { dark: "anthracite" },
+				personality: "friendly",
 				defaultThinkingLevel: Effort.Low,
 			});
 
@@ -1052,7 +1014,7 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			expect(settings.get("exa.enabled")).toBe(false);
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 			expect((await readSettings()).exa).toEqual({ enabled: false });
 		});
@@ -1066,7 +1028,7 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			expect(settings.get("exa.enabled")).toBe(false);
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 			expect((await readSettings()).exa).toEqual({ enabled: false });
 		});
@@ -1077,7 +1039,7 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			expect(settings.get("exa.enabled")).toBe(true);
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 			expect((await readSettings()).exa).toBeUndefined();
 		});
@@ -1088,7 +1050,7 @@ describe("Settings", () => {
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
 
 			expect(settings.get("computer.enabled")).toBe(true);
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 			expect((await readSettings()).computer).toEqual({ enabled: true });
 		});
@@ -1245,11 +1207,11 @@ describe("Settings", () => {
 			expect(fs.readFileSync(path.join(agentDir, "last-changelog-version"), "utf8")).toBe("0.40.0");
 
 			// Key stripped from config.yml on the next save.
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 			const onDisk = await readSettings();
 			expect("lastChangelogVersion" in onDisk).toBe(false);
-			expect((onDisk.display as Record<string, unknown>).showTokenUsage).toBe(true);
+			expect((onDisk.images as Record<string, unknown>).blockImages).toBe(true);
 		});
 
 		it("never clobbers an existing marker with the legacy config value", async () => {
@@ -1389,7 +1351,7 @@ describe("Settings", () => {
 			expect(settings.get("todo.remindersMax")).toBe(1);
 
 			// Touch an unrelated key so the migrated tree is written back.
-			settings.set("display.showTokenUsage", true);
+			settings.set("images.blockImages", true);
 			await settings.flush();
 
 			const onDisk = await readSettings();
@@ -1429,15 +1391,15 @@ describe("Settings", () => {
 				jsonPath,
 				`{
 					// This is a comment
-					"display": {
+					"images": {
 						/* Multiline comment */
-						"showTokenUsage": true
+						"blockImages": true
 					}
 				}`,
 			);
 
 			const settings = await Settings.init({ cwd: projectDir, agentDir });
-			expect(settings.get("display.showTokenUsage")).toBe(true);
+			expect(settings.get("images.blockImages")).toBe(true);
 			expect(fs.existsSync(jsonPath)).toBe(false);
 			expect(fs.existsSync(`${jsonPath}.bak`)).toBe(true);
 		});

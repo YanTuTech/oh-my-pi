@@ -32,16 +32,14 @@ Matching is deliberate so source code and paths do not accidentally change agent
 
 ## Configuration
 
-Open `/settings` and use **Interaction → Magic Keywords**, or change the settings from a shell:
+Configure the Runtime globally in `~/.omp/agent/config.yml`, in project `.omp/config.yml`, or through a host-owned `Settings` instance:
 
-```bash
-# Disable every magic keyword
-omp config set magicKeywords.enabled false
-
-# Disable one keyword while leaving the others enabled
-omp config set magicKeywords.ultrathink false
-omp config set magicKeywords.orchestrate false
-omp config set magicKeywords.workflow false
+```yaml
+magicKeywords:
+  enabled: false
+  ultrathink: false
+  orchestrate: false
+  workflow: false
 ```
 
-The global switch and three per-keyword switches default to `true`. The global switch gates every hidden notice; a per-keyword switch gates only that notice (and ultrathink's maximum-auto-thinking override). These settings do not currently disable the editor/message gradient. Run `omp config list` to inspect every setting and its current value. See [Settings](./settings.md) for configuration scopes, precedence, and project-local overrides.
+The global switch and three per-keyword switches default to `true`. The global switch gates every hidden notice; a per-keyword switch gates only that notice (and ultrathink's maximum-auto-thinking override). See [Settings](./settings.md) for configuration scopes, precedence, and project-local overrides.

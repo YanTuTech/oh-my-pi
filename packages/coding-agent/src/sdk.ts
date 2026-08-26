@@ -754,9 +754,8 @@ export async function discoverSessionExtensionPaths(
 /**
  * Load the discovered/configured extensions for a session — everything {@link
  * createAgentSession} would load except the inline factory extensions it appends
- * itself. Extracted so the CLI can resolve extension-registered flags (and thus
- * classify `@file` arguments extension-aware) *before* a session — and its
- * terminal breadcrumb — is created, then hand the result back through
+ * itself. Extracted so a host can resolve extension-registered flags before a
+ * session is created, then hand the result back through
  * {@link CreateAgentSessionOptions.preloadedExtensions} so the work is not
  * repeated. Keep this the single source of the discovery branch logic.
  */
@@ -3076,7 +3075,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				model: getActiveModelString(),
 				includeModelInPrompt: settings.get("includeModelInPrompt"),
 				personality: agentKind === "sub" ? "none" : settings.get("personality"),
-				renderMermaid: settings.get("tui.renderMermaid"),
+				renderMermaid: settings.get("prompts.renderMermaid"),
 				activeRepoContext,
 			});
 

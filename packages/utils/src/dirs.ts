@@ -823,11 +823,6 @@ export function getMemoriesDir(agentDir?: string): string {
 	return dirs.agentSubdir(agentDir, "memories", "state");
 }
 
-/** Get the terminal sessions directory (~/.omp/agent/terminal-sessions). */
-export function getTerminalSessionsDir(agentDir?: string): string {
-	return dirs.agentSubdir(agentDir, "terminal-sessions", "state");
-}
-
 /** Get the crash log path (~/.omp/agent/omp-crash.log). */
 export function getCrashLogPath(agentDir?: string): string {
 	return dirs.agentSubdir(agentDir, "omp-crash.log", "state");

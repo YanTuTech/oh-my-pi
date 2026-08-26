@@ -259,7 +259,6 @@ describe("SessionManager legacy session migration persistence", () => {
 	let tempDir: string;
 	let testAgentDir: string;
 	const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-	const originalTmuxPane = process.env.TMUX_PANE;
 	const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
 
 	function makeAssistantMessage() {
@@ -287,20 +286,12 @@ describe("SessionManager legacy session migration persistence", () => {
 	}
 
 	beforeEach(() => {
-		// Deterministic, non-TTY terminal id so the per-terminal breadcrumb
-		// (written by newSession/continueRecent) is scoped to this test and
-		// cannot leak across files in the same suite run. Without it, a real
-		// terminal id (WT_SESSION/TMUX_PANE) points continueRecent at stale
-		// breadcrumb state from earlier tests in this file.
-		process.env.TMUX_PANE = "%legacy-migration-test";
 		testAgentDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-session-manager-legacy-agent-"));
 		setAgentDir(testAgentDir);
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-session-manager-legacy-"));
 	});
 
 	afterEach(() => {
-		if (originalTmuxPane === undefined) delete process.env.TMUX_PANE;
-		else process.env.TMUX_PANE = originalTmuxPane;
 		if (originalAgentDir) {
 			setAgentDir(originalAgentDir);
 		} else {

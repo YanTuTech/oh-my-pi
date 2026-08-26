@@ -114,24 +114,6 @@ export declare class FileLock {
   release(): void
 }
 
-/**
- * Stateful incremental syntax highlighter for streamed code.
- *
- * Carries syntect parser state across [`HighlightStream::push`] calls so
- * chunked highlighting of a growing buffer is byte-identical to highlighting
- * the concatenated text in one call. Feed newline-terminated complete lines;
- * only the final push may omit the trailing newline. An unresolved language
- * echoes input unchanged.
- */
-export declare class HighlightStream {
-  /** Create a stream for `lang`; an unknown language yields a passthrough. */
-  constructor(lang: string | undefined | null, colors: HighlightColors)
-  /** Whether the language resolved to a grammar; `false` means passthrough. */
-  get supported(): boolean
-  /** Highlight the next chunk and advance parser state. */
-  push(chunk: string): string
-}
-
 /** WebRTC peer that accepts 16 kHz mono PCM and renders remote Opus audio. */
 export declare class LiveWebRtcPeer {
   /**
@@ -154,24 +136,6 @@ export declare class LiveWebRtcPeer {
   setMuted(muted: boolean): void
   /** Close media, the data channel, the peer connection, and speaker playback. */
   close(): Promise<void>
-}
-
-/**
- * Long-lived macOS appearance observer.
- *
- * Subscribes to `AppleInterfaceThemeChangedNotification` via
- * `CFDistributedNotificationCenter` and calls the provided callback
- * with `"dark"` or `"light"` on each change (and once on start).
- *
- * A 2-second polling timer also runs as fallback — distributed
- * notifications may not reliably reach background threads on all
- * macOS versions.
- *
- * On non-macOS platforms, `start()` returns a no-op observer.
- */
-export declare class MacAppearanceObserver {
-  static start(callback: (err: null | Error, appearance: MacOSAppearance) => void): MacAppearanceObserver
-  stop(): void
 }
 
 /**
@@ -293,48 +257,6 @@ export declare class StrictWorkspaceMentionReader {
   constructor(workspaceRoot: string, expectedIdentity: WorkspaceRootIdentity)
   read(relativePath: string): WorkspaceMentionReadResult
   dispose(): boolean
-}
-
-/**
- * Dedicated writer thread for one terminal fd.
- *
- * Constructed by the TUI's `ProcessTerminal` around stdout. The fd is
- * `dup(2)`'d at construction and closed on drop, so later manipulation of the
- * original descriptor does not affect the pump.
- */
-export declare class TtyWriter {
-  /**
-   * Start a pump thread for `fd` (typically 1). Fails on non-Unix hosts and
-   * when the descriptor cannot be duplicated.
-   */
-  constructor(fd: number)
-  /**
-   * Enqueue terminal output; never blocks. Returns the total bytes now
-   * pending (including this chunk).
-   *
-   * Reads the JS string as UTF-16 through the thread's scratch arena and
-   * transcodes it with `xutf` straight into the shared back buffer, so a
-   * warm writer costs no per-call heap allocation.
-   */
-  write(data: string): number
-  /** Bytes accepted but not yet written to the terminal. */
-  pending(): number
-  /** True once a write failed (dead PTY); queued output has been dropped. */
-  get dead(): boolean
-  /**
-   * Block the calling thread until the queue drains, the writer dies, or
-   * `timeout_ms` elapses. Returns true when fully drained. Exit paths only.
-   */
-  flushSync(timeoutMs: number): boolean
-  /**
-   * Flush (bounded by `flush_timeout_ms`), stop the pump thread, and join it.
-   *
-   * A pump stuck in a blocked `write(2)` (stalled-but-alive PTY consumer)
-   * cannot be joined without freezing the caller: when the bounded flush
-   * times out the thread is detached instead and its dup'd fd is leaked —
-   * closing it under a blocked write would race kernel fd reuse.
-   */
-  stop(flushTimeoutMs: number): void
 }
 
 /**
@@ -828,12 +750,6 @@ export interface DesktopWindow {
 }
 
 /**
- * Detect macOS system appearance via CoreFoundation.
- * Returns `"dark"` or `"light"` on macOS, `null` on other platforms.
- */
-export declare function detectMacOSAppearance(): MacOSAppearance | null
-
-/**
  * Generate an Apple `DeviceCheck` attestation token.
  *
  * Resolves with the token (or the error reason) after at most a 1-second
@@ -980,17 +896,6 @@ export interface EnclosingBoundaryOptions {
   ranges: Array<LineRange>
 }
 
-/**
- * Encode image bytes into a SIXEL escape sequence for terminal rendering.
- *
- * The input image is decoded and resized to the requested pixel dimensions
- * before encoding.
- *
- * # Errors
- * Returns an error if decoding, resizing, or SIXEL encoding fails.
- */
-export declare function encodeSixel(bytes: Uint8Array, targetWidthPx: number, targetHeightPx: number): string
-
 /** Tokenizer encoding to use. */
 export declare enum Encoding {
   /** GPT-4o / o1 / GPT-5 (default). */
@@ -1094,9 +999,6 @@ export interface FuzzyFindResult {
   /** Total number of matches found (may exceed `matches.len()`). */
   totalMatches: number
 }
-
-/** Get list of supported languages. */
-export declare function getSupportedLanguages(): Array<string>
 
 /**
  * Get work profile data from the last N seconds.
@@ -1295,49 +1197,6 @@ export interface GrepResult {
 export declare function hasMatch(content: string | Uint8Array, pattern: string | Uint8Array, ignoreCase?: boolean | undefined | null, multiline?: boolean | undefined | null): boolean
 
 /**
- * Highlight code and return ANSI-colored lines.
- *
- * # Arguments
- * * `code` - The source code to highlight
- * * `lang` - Language identifier (e.g., "rust", "typescript", "python")
- * * `colors` - Theme colors as ANSI escape sequences
- *
- * # Returns
- * Highlighted code with ANSI color codes, or the original code if highlighting
- * fails.
- */
-export declare function highlightCode(code: string, lang: string | undefined | null, colors: HighlightColors): string
-
-/**
- * Theme colors for syntax highlighting.
- * Each color is an ANSI escape sequence (e.g., "\x1b[38;2;255;0;0m").
- */
-export interface HighlightColors {
-  /** ANSI color for comments. */
-  comment: string
-  /** ANSI color for keywords. */
-  keyword: string
-  /** ANSI color for function names. */
-  function: string
-  /** ANSI color for variables and identifiers. */
-  variable: string
-  /** ANSI color for string literals. */
-  string: string
-  /** ANSI color for numeric literals. */
-  number: string
-  /** ANSI color for type identifiers. */
-  type: string
-  /** ANSI color for operators. */
-  operator: string
-  /** ANSI color for punctuation tokens. */
-  punctuation: string
-  /** ANSI color for diff inserted lines. */
-  inserted?: string
-  /** ANSI color for diff deleted lines. */
-  deleted?: string
-}
-
-/**
  * Convert HTML source to Markdown with optional preprocessing.
  *
  * # Errors
@@ -1468,16 +1327,6 @@ export declare function isoStart(kind: IsoBackendKind | undefined | null, lower:
 /** Tear down a previously started backend at `merged`. */
 export declare function isoStop(kind: IsoBackendKind | undefined | null, merged: string): Promise<void>
 
-/** Event types from Kitty keyboard protocol (flag 2). */
-export declare enum KeyEventType {
-  /** Key press event. */
-  Press = 1,
-  /** Key repeat event. */
-  Repeat = 2,
-  /** Key release event. */
-  Release = 3
-}
-
 export interface LineRange {
   /** 1-indexed inclusive first visible line. */
   startLine: number
@@ -1530,42 +1379,6 @@ export interface ListWorkspaceResult {
 }
 
 /**
- * System UI appearance reported by native macOS APIs (`detectMacOSAppearance`
- * and observer).
- */
-export declare enum MacOSAppearance {
-  /** Dark color scheme. */
-  Dark = 'dark',
-  /** Light color scheme. */
-  Light = 'light'
-}
-
-/**
- * Return the autocorrection macOS chooses for one completed-word range.
- *
- * Returns `null` when no confident correction exists or the service is
- * unavailable.
- * On macOS, the lookup runs on the dedicated spelling thread.
- */
-export declare function macOSAutocorrectWord(text: string, start: number, length: number): Promise<string | null>
-
-/**
- * Find every misspelled word using the active macOS dictionaries.
- *
- * Returns an empty list when Apple's spelling service is unavailable.
- * On macOS, the check runs on the dedicated spelling thread.
- */
-export declare function macOSCheckSpelling(text: string): Promise<Array<SpellingRange>>
-
-/**
- * Return macOS dictionary completions for one partial-word range.
- *
- * Returns an empty list when Apple's spelling service is unavailable.
- * On macOS, the lookup runs on the dedicated spelling thread.
- */
-export declare function macOSCompleteWord(text: string, start: number, length: number): Promise<Array<string>>
-
-/**
  * Options for starting a macOS power assertion.
  *
  * Each boolean maps to a `caffeinate(8)` flag and a corresponding `IOKit`
@@ -1589,17 +1402,6 @@ export interface MacOSPowerAssertionOptions {
   display?: boolean
 }
 
-/** Whether the host can use Apple's native spelling service. */
-export declare function macOSSpellCheckerAvailable(): boolean
-
-/**
- * Return macOS replacement guesses for one misspelled-word range.
- *
- * Returns an empty list when Apple's spelling service is unavailable.
- * On macOS, the lookup runs on the dedicated spelling thread.
- */
-export declare function macOSSpellingGuesses(text: string, start: number, length: number): Promise<Array<string>>
-
 /** A single match in the content. */
 export interface Match {
   /** 1-indexed line number. */
@@ -1613,28 +1415,6 @@ export interface Match {
   /** Whether the line was truncated. */
   truncated?: boolean
 }
-
-/**
- * Match input data against a key identifier string.
- *
- * Returns true when the bytes represent the specified key with modifiers.
- */
-export declare function matchesKey(data: string, keyId: string, kittyProtocolActive: boolean): boolean
-
-/**
- * Match Kitty protocol input against a codepoint and modifier mask.
- *
- * Returns true when the parsed sequence matches the expected codepoint (or
- * base layout key) and modifier bits.
- */
-export declare function matchesKittySequence(data: string, expectedCodepoint: number, expectedModifier: number): boolean
-
-/**
- * Check if input matches a legacy escape sequence for the given key name.
- *
- * Returns true only when the byte sequence maps to the exact key identifier.
- */
-export declare function matchesLegacySequence(data: string, keyName: string): boolean
 
 /** N-API opt-in handle for the minimizer. */
 export interface MinimizerOptions {
@@ -1747,34 +1527,6 @@ export interface NodeSpan {
   /** Tree-sitter grammar node kind (e.g. `attribute_item`, `function_item`). */
   kind: string
 }
-
-/** Parsed Kitty keyboard protocol sequence result for a Kitty input sequence. */
-export interface ParsedKittyResult {
-  /** Primary codepoint associated with the key. */
-  codepoint: number
-  /** Optional shifted key codepoint from the sequence. */
-  shiftedKey?: number
-  /** Optional base layout key codepoint from the sequence. */
-  baseLayoutKey?: number
-  /** Modifier bitmask (shift/alt/ctrl), excluding lock bits. */
-  modifier: number
-  /** Optional event type (1 = press, 2 = repeat, 3 = release). */
-  eventType?: KeyEventType
-}
-
-/**
- * Parse terminal input and return a normalized key identifier.
- *
- * Returns a key id like "escape" or "ctrl+c", or None if unrecognized.
- */
-export declare function parseKey(data: string, kittyProtocolActive: boolean): string | null
-
-/**
- * Parse a Kitty keyboard protocol sequence.
- *
- * Returns a structured parse result when the input is a valid Kitty sequence.
- */
-export declare function parseKittySequence(data: string): ParsedKittyResult | null
 
 /** One hunk of a unified diff, matching jsdiff `structuredPatch` hunks. */
 export interface PatchHunk {
@@ -2005,8 +1757,6 @@ export interface SearchResult {
   error?: string
 }
 
-export declare function setHangulCompatJamoWidthOverride(value: number): void
-
 /** Options for executing a shell command via brush-core. */
 export interface ShellExecuteOptions {
   /** Command string to execute in the shell. */
@@ -2143,14 +1893,6 @@ export interface SnapcompactRenderOptions {
  */
 export declare function snapcompactSupportedChars(font: string, chars: string): string
 
-/** A misspelled span measured in JavaScript/UTF-16 code units. */
-export interface SpellingRange {
-  /** Inclusive UTF-16 start offset. */
-  start: number
-  /** UTF-16 length of the misspelled span. */
-  length: number
-}
-
 /**
  * Unified-diff hunks with jsdiff
  * `structuredPatch(_, _, oldText, newText, _, _, { context }).hunks`
@@ -2208,13 +1950,6 @@ export interface SummarySegment {
 }
 
 /**
- * Check if a language is supported for highlighting.
- * Returns true if the language has either direct support or a fallback
- * mapping.
- */
-export declare function supportsLanguage(lang: string): boolean
-
-/**
  * Truncate text to a visible width, preserving ANSI codes.
  *
  * Pads with spaces when requested.
@@ -2252,9 +1987,6 @@ export interface VectorTopK {
  * Tabs count as a fixed-width cell.
  */
 export declare function visibleWidth(text: string, tabWidth: number): number
-
-/** Warm syntax grammars and scope matchers on the native worker pool. */
-export declare function warmHighlighter(): Promise<undefined>
 
 /** Profiling results returned to JavaScript. */
 export interface WorkProfile {

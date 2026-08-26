@@ -305,7 +305,7 @@ describe("ACP lazy startup", () => {
 
 		const authStorage = createInMemoryAuthStorage();
 		try {
-			const settings = Settings.isolated({ "marketplace.autoUpdate": "off" });
+			const settings = Settings.isolated();
 			const modelRegistry = new ModelRegistry(authStorage);
 			let sessionHasUI: boolean | undefined;
 			let deferredUsageReserveConfirmation: boolean | undefined;

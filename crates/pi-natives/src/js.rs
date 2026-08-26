@@ -10,10 +10,10 @@
 //!
 //! [`utf16`] is the default: it is the JS string's own encoding, so it is the
 //! only accessor that never transcodes. [`utf8`] exists for algorithms that are
-//! byte- or `str`-shaped (terminal escape parsing, syntect, paths). Reach for
+//! byte- or `str`-shaped (terminal escape parsing and paths). Reach for
 //! [`into_string`] only when the text must outlive the N-API callback — a value
 //! moved into a worker task, a channel, or an async body.
-//! Short, bounded strings — ANSI colours, font names, language ids — skip the
+//! Short, bounded strings — ANSI colours, font names, and language ids — skip the
 //! arena entirely: [`InlineStr`] decodes them into a fixed-size array that
 //! lives in the struct itself, so a whole options object crosses with no
 //! allocation.

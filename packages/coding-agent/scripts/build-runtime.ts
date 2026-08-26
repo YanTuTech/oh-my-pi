@@ -1,23 +1,21 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import boundary from "../../../runtime-boundary.json" with { type: "json" };
 
 const packageDir = path.resolve(import.meta.dir, "..");
+const repoRoot = path.resolve(packageDir, "../..");
 const outdir = path.join(packageDir, "dist", "runtime");
 
 await fs.rm(outdir, { recursive: true, force: true });
 
 const result = await Bun.build({
-	entrypoints: [
-		path.join(packageDir, "src", "index.ts"),
-		path.join(packageDir, "src", "runtime-api.ts"),
-		path.join(packageDir, "src", "runtime-acp-host.ts"),
-		path.join(packageDir, "src", "runtime-rpc-host.ts"),
-	],
+	entrypoints: boundary.requiredBuildEntrypoints.map(entrypoint => path.join(repoRoot, entrypoint)),
+	root: path.join(packageDir, "src"),
 	outdir,
 	target: "bun",
-	external: ["omp-legacy-pi-modules"],
+	external: ["@oh-my-pi/pi-natives", "@oh-my-pi/pi-natives/*", "omp-legacy-pi-modules"],
 	define: { "process.env.PI_BUNDLED": JSON.stringify("true") },
-	naming: "[name].js",
+	naming: "[dir]/[name].js",
 });
 
 if (!result.success) {

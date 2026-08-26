@@ -6,8 +6,8 @@ import { createSessionTeardown } from "../../src/modes/session-teardown";
  * Signal-safe session teardown contract (issue #4080). The callback body
  * registered on `postmortem` for `SIGINT`/`SIGTERM`/`SIGHUP`/`uncaughtException`
  * must persist the in-progress editor draft and emit the extension
- * `session_shutdown` event (via `session.dispose()`) — the same steps the TUI
- * Ctrl+C keypress path performs. Both paths funnel through
+ * `session_shutdown` event (via `session.dispose()`). Host shutdown and signal
+ * paths both funnel through
  * `createSessionTeardown`, so exercising it directly proves the acceptance
  * criteria hold regardless of the trigger.
  */
@@ -124,7 +124,7 @@ describe("createSessionTeardown", () => {
 
 		// Kick off two concurrent invocations while the first is still awaiting
 		// disposeSession — this is exactly what happens if a SIGTERM arrives
-		// mid-`InteractiveMode.shutdown()`.
+		// during host shutdown.
 		const first = teardown();
 		const second = teardown();
 		release.resolve();
@@ -175,7 +175,7 @@ describe("createSessionTeardown", () => {
 		expect(received).toEqual([postmortem.Reason.SIGTERM]);
 	});
 
-	it("keypress path passes no reason — dispose falls back to a normal exit record", async () => {
+	it("host path passes no reason — dispose falls back to a normal exit record", async () => {
 		const received: Array<postmortem.Reason | undefined> = [];
 
 		const teardown = createSessionTeardown({

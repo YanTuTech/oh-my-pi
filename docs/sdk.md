@@ -196,7 +196,7 @@ If restore fails, `modelFallbackMessage` explains fallback.
 1. runtime override (`setRuntimeApiKey`, used by CLI `--api-key`)
 2. config-sourced API key override (`models.yml` provider `apiKey`)
 3. stored OAuth credential, including refresh when needed
-4. API key persisted by a successful `/login`
+4. API key persisted through host-driven `AuthStorage` provisioning
 5. provider environment variables
 6. other stored API-key credential in `agent.db` / broker-backed storage
 7. custom-provider resolver fallback

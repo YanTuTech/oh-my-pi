@@ -4,7 +4,7 @@ Prevents sensitive values (API keys, tokens, passwords) from being sent to LLM p
 
 ## Enabling
 
-Disabled by default. Toggle via `/settings` UI or directly in `config.yml`:
+Disabled by default. Enable it through the host settings API or directly in `config.yml`:
 
 ```yaml
 secrets:

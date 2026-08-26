@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { Agent, AppendOnlyContextManager } from "@oh-my-pi/pi-agent-core";
 import type { ProviderSessionState } from "@oh-my-pi/pi-ai";
@@ -108,5 +109,15 @@ describe("AgentSession fresh provider state", () => {
 
 		expect(session.sessionId).toBe(sessionManager.getSessionId());
 		expect(session.sessionId).not.toBe(freshResult.sessionId);
+	});
+
+	it("materializes a host-visible new-session boundary before any model output", async () => {
+		const { session, sessionManager } = await createFreshHarness();
+
+		expect(await session.newSession()).toBe(true);
+
+		const sessionFile = sessionManager.getSessionFile();
+		expect(sessionFile).toBeDefined();
+		expect(fs.existsSync(sessionFile!)).toBe(true);
 	});
 });

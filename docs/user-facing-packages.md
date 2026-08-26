@@ -2,6 +2,8 @@
 
 This page records which workspace packages form the shipped headless Runtime and which packages are development or external integration tooling.
 
+The normative, automatically enforced boundary is documented in [Agent Runtime boundary](runtime-boundary.md) and encoded in [`runtime-boundary.json`](../runtime-boundary.json). This page describes the package roles within that boundary.
+
 ## Shipped Runtime packages
 
 | Package | Runtime responsibility |
