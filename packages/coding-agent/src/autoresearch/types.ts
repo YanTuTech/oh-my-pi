@@ -123,7 +123,6 @@ export interface RunningExperiment {
 export interface AutoresearchRuntime {
 	autoresearchMode: boolean;
 	autoResumeArmed: boolean;
-	dashboardExpanded: boolean;
 	lastAutoResumePendingRunNumber: number | null;
 	lastRunDuration: number | null;
 	lastRunAsi: ASIData | null;

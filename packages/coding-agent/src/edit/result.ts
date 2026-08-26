@@ -9,9 +9,9 @@ import { buildCompactDiffPreview } from "@oh-my-pi/hashline";
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { FileDiagnosticsResult } from "../lsp";
 import { outputMeta } from "../tools/output-meta";
+import type { EditToolDetails, EditToolPerFileResult } from "./details";
 import { generateDiffString } from "./diff";
 import type { Operation } from "./modes/patch";
-import type { EditToolDetails, EditToolPerFileResult } from "./renderer";
 import { pruneOversizedEditSnapshots } from "./snapshot-details";
 
 /** Separates completed edit sections in model-visible tool output. */

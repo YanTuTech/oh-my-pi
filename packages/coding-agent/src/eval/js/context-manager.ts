@@ -5,7 +5,7 @@ import {
 	resolveWorkerSpawnCmd,
 	workerEnvFromParent,
 } from "../../subprocess/worker-client";
-import type { ToolSession } from "../../tools";
+import type { ToolSession } from "../../tools/runtime";
 import { ToolAbortError, ToolError } from "../../tools/tool-errors";
 import { safeSend as safeSendIpc } from "../../utils/ipc";
 import { EVAL_TIMEOUT_PAUSE_OP, EVAL_TIMEOUT_RESUME_OP } from "../bridge-timeout";
@@ -242,8 +242,8 @@ export async function disposeVmContextsByOwner(ownerId: string): Promise<void> {
  * it answers the `init` handshake in a real isolated subprocess (not the inline
  * fallback). Catches silent process-load and init-message regressions
  * that otherwise strand every cell on the init timeout in a distribution build —
- * the failure mode that motivated `installWorkerInbox`. Wired into
- * `omp --smoke-test` so binary / source / tarball installs all exercise it.
+ * the failure mode that motivated `installWorkerInbox`. Runtime package tests
+ * and tarball install smoke tests exercise the same worker contract.
  */
 export async function smokeTestJsEvalWorker(): Promise<void> {
 	const worker = spawnJsWorker();

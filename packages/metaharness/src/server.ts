@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * metaharness server: REST + SSE API over the run store, static web
- * dashboard, and a launcher that spawns the CLI runner as a managed child.
+ * Headless metaharness REST + SSE API over the run store, plus a launcher
+ * that spawns benchmark runners as managed children.
  *
  *   bun src/server.ts [--port 4700] [--jobs-dir <path>]
  *
@@ -41,8 +41,6 @@ export interface CreateExperimentRequest {
 	id: string;
 	goal?: string;
 }
-
-import indexHtml from "./web/index.html";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..");
 const PKG_DIR = path.resolve(import.meta.dir, "..");
@@ -211,13 +209,6 @@ export class ManagerServer {
 		this.#server = Bun.serve({
 			port,
 			idleTimeout: 0,
-			// Bun bundles the dashboard (React + TSX) from the HTML import and
-			// serves it on the same port as the API — one process, no Vite.
-			routes: { "/": indexHtml },
-			// Only `hmr`: the `console: true` mirror adds another dev-client
-			// stream with the same teardown hazard (see isDevStreamTeardown)
-			// for little value.
-			development: process.env.NODE_ENV !== "production" && { hmr: true },
 			fetch: request => this.#route(request),
 		});
 		return this.#server;
@@ -741,45 +732,19 @@ function readTextTail(file: string, cap: number): string {
 	}
 }
 
-/**
- * Bun's dev server (HMR websocket, browser error reports, console mirror)
- * reads client streams that a tab disconnect or `--hot` reload tears down
- * mid-read. The resulting `AbortError: ERR_STREAM_RELEASE_LOCK` surfaces as
- * an unhandled rejection from Bun internals — fatal by default, which would
- * kill the manager and orphan every running benchmark job.
- */
-function isDevStreamTeardown(err: unknown): boolean {
-	return err instanceof Error && (err as Error & { code?: string }).code === "ERR_STREAM_RELEASE_LOCK";
-}
-
 if (import.meta.main) {
-	// `bun --hot` re-evaluates this module in-place: retire the previous
-	// instance first, or its sync ticker and sqlite connection leak per reload.
 	const host = globalThis as typeof globalThis & {
 		__metaharnessServer?: ManagerServer;
-		__metaharnessHooks?: boolean;
 	};
-	await host.__metaharnessServer?.stop();
 	const { port, jobsDir } = parseServerArgs(process.argv.slice(2));
 	const manager = new ManagerServer(jobsDir);
 	host.__metaharnessServer = manager;
 	const server = manager.start(port);
-	process.stdout.write(`metaharness listening on http://localhost:${server.port} (jobs: ${jobsDir})\n`);
-	// Process-wide hooks register once; `--hot` re-evals reuse them via `host`.
-	if (!host.__metaharnessHooks) {
-		host.__metaharnessHooks = true;
-		const shutdown = async () => {
-			await host.__metaharnessServer?.stop();
-			process.exit(0);
-		};
-		process.on("SIGINT", shutdown);
-		process.on("SIGTERM", shutdown);
-		process.on("unhandledRejection", err => {
-			if (isDevStreamTeardown(err)) {
-				process.stderr.write("ignored dev-server stream teardown (ERR_STREAM_RELEASE_LOCK)\n");
-				return;
-			}
-			throw err; // preserve fail-fast for real bugs
-		});
-	}
+	process.stdout.write(`metaharness API listening on http://localhost:${server.port} (jobs: ${jobsDir})\n`);
+	const shutdown = async () => {
+		await host.__metaharnessServer?.stop();
+		process.exit(0);
+	};
+	process.on("SIGINT", shutdown);
+	process.on("SIGTERM", shutdown);
 }

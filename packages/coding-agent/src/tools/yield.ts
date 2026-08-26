@@ -15,8 +15,8 @@ import {
 import { prompt } from "@oh-my-pi/pi-utils";
 import yieldDescription from "../prompts/tools/yield.md" with { type: "text" };
 import { subprocessToolRegistry } from "../task/subprocess-tool-registry";
-import type { ToolSession } from ".";
 import { buildOutputValidator, formatAllValidationIssues } from "./output-schema-validator";
+import type { ToolSession } from "./runtime";
 
 const YIELD_RESULT_FORMAT_HINT =
 	'Submit success as {"result":{"data":<your output>}} or failure as {"result":{"error":"message"}}.';

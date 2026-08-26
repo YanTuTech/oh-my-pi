@@ -2,12 +2,9 @@ import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { gzipSync } from "node:zlib";
-import { runGcCommand } from "@oh-my-pi/pi-coding-agent/cli/gc-cli";
-import {
-	mergeSessionRanking,
-	rankSessionSearchMatches,
-} from "@oh-my-pi/pi-coding-agent/modes/components/session-selector";
+import { runRuntimeGc } from "@oh-my-pi/pi-coding-agent/session/runtime-gc";
 import { listSessions, type SessionInfo } from "@oh-my-pi/pi-coding-agent/session/session-listing";
+import { mergeSessionRanking, rankSessionSearchMatches } from "@oh-my-pi/pi-coding-agent/session/session-ranking";
 import { MemorySessionStorage } from "@oh-my-pi/pi-coding-agent/session/session-storage";
 import { getHistoryDbPath, getSessionsDir, TempDir } from "@oh-my-pi/pi-utils";
 
@@ -90,15 +87,13 @@ describe("slotted session headers", () => {
 			db.run("INSERT INTO history (prompt, session_id) VALUES ('old prompt', 'archive-header-id')");
 			db.close();
 
-			const result = await runGcCommand({
-				flags: {
-					agentDir: root,
-					archive: true,
-					coldArchiveAfterDays: 30,
-					retainNewestGlobal: 0,
-					retainNewestPerCwd: 0,
-					apply: true,
-				},
+			const result = await runRuntimeGc({
+				agentDir: root,
+				archive: true,
+				coldArchiveAfterDays: 30,
+				retainNewestGlobal: 0,
+				retainNewestPerCwd: 0,
+				apply: true,
 			});
 
 			const check = new Database(dbPath);

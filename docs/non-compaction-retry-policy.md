@@ -9,8 +9,6 @@ It explicitly excludes context-overflow recovery via auto-compaction. Overflow i
 - [`../packages/coding-agent/src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
 - [`../packages/coding-agent/src/session/turn-recovery.ts`](../packages/coding-agent/src/session/turn-recovery.ts) — retry classification, backoff, credential rotation, and model fallback
 - [`../packages/coding-agent/src/config/settings-schema.ts`](../packages/coding-agent/src/config/settings-schema.ts)
-- [`../packages/coding-agent/src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
-- [`../packages/coding-agent/src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
 - [`../packages/coding-agent/src/modes/rpc/rpc-mode.ts`](../packages/coding-agent/src/modes/rpc/rpc-mode.ts)
 - [`../packages/coding-agent/src/modes/rpc/rpc-client.ts`](../packages/coding-agent/src/modes/rpc/rpc-client.ts)
 - [`../packages/coding-agent/src/modes/rpc/rpc-types.ts`](../packages/coding-agent/src/modes/rpc/rpc-types.ts)
@@ -133,9 +131,9 @@ If abort hits while sleeping, catch path emits:
 
 `abort()` calls `abortRetry()` before aborting the active agent stream. This guarantees retry backoff is cancelled when user issues a general abort.
 
-### TUI interaction
+### Host interaction
 
-On `auto_retry_start`, EventController (`#handleAutoRetryStart`):
+On `auto_retry_start`, a host can:
 
 - stops the working loader and clears the status container
 - renders a `retryLoader` with text: `Retrying (attempt/maxAttempts) in Ns… (esc to cancel)`
@@ -204,12 +202,12 @@ Propagation:
 - emitted through `AgentSession.subscribe(...)`
 - forwarded to extension runner as extension events
 - in RPC mode, forwarded directly as JSON event objects (`session.subscribe(event => output(event))`)
-- in TUI, consumed by `EventController` for loader/error UI
+- available to host event consumers for progress/error projection
 
 Final failure surfacing:
 
 - On max-exceeded, max-delay failure, or cancellation, `auto_retry_end.success === false`
-- TUI shows: `Retry failed after N attempts: <finalError>`
+- hosts receive the final attempt count and error
 - Extensions/hooks receive `auto_retry_end` with same fields
 - RPC consumers receive same event object on stdout stream
 

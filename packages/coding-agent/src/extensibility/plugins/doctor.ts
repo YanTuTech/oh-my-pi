@@ -1,5 +1,4 @@
 import { $which } from "@oh-my-pi/pi-utils";
-import { theme } from "../../modes/theme/theme";
 import type { DoctorCheck } from "./types";
 
 export async function runDoctorChecks(): Promise<DoctorCheck[]> {
@@ -46,12 +45,7 @@ export function formatDoctorResults(checks: DoctorCheck[]): string {
 	const lines: string[] = ["System Health Check", "=".repeat(40), ""];
 
 	for (const check of checks) {
-		const icon =
-			check.status === "ok"
-				? theme.status.enabled
-				: check.status === "warning"
-					? theme.status.warning
-					: theme.status.error;
+		const icon = check.status === "ok" ? "OK" : check.status === "warning" ? "WARN" : "ERROR";
 		lines.push(`${icon} ${check.name}: ${check.message}`);
 	}
 

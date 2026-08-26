@@ -770,7 +770,6 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 		const dir = await writePackage({
 			"package.json": JSON.stringify({ name: "legacy-tool-factory-ext", version: "1.0.0" }),
 			"index.ts": [
-				'import { Text } from "@earendil-works/pi-tui";',
 				"import {",
 				"  createBashToolDefinition,",
 				"  createFindToolDefinition,",
@@ -778,8 +777,6 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 				"  createLsToolDefinition,",
 				"  createReadToolDefinition,",
 				"  DEFAULT_MAX_LINES,",
-				"  getLanguageFromPath,",
-				"  highlightCode,",
 				"  truncateHead,",
 				'} from "@earendil-works/pi-coding-agent";',
 				"const cwd = process.cwd();",
@@ -790,16 +787,9 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 				"  createFindToolDefinition(cwd),",
 				"  createLsToolDefinition(cwd),",
 				"];",
-				"const fakeTheme = { fg: (_color, text) => text, bold: text => text };",
-				"const fakeContext = { lastComponent: new Text('', 0, 0) };",
-				"for (const definition of definitions) {",
-				"  if (typeof definition.renderCall === 'function') definition.renderCall({ command: 'echo ok', path: '.', pattern: '*.ts' }, fakeTheme, fakeContext);",
-				"}",
 				"export const toolNames = definitions.map(definition => definition.name);",
 				"export const helperValues = {",
 				"  maxLines: DEFAULT_MAX_LINES,",
-				"  language: getLanguageFromPath('src/example.ts'),",
-				"  highlighted: highlightCode('const x = 1;', 'ts').length,",
 				"  truncated: truncateHead('a\\nb', { maxLines: 1 }).truncated,",
 				"};",
 				"export default function (pi) { for (const definition of definitions) pi.registerTool(definition); }",
@@ -808,14 +798,12 @@ describe("legacy-pi in-place module loading (issue #1674)", () => {
 
 		const mod = (await loadLegacyPiModule(path.join(dir, "index.ts"))) as {
 			toolNames: string[];
-			helperValues: { maxLines: number; language: string; highlighted: number; truncated: boolean };
+			helperValues: { maxLines: number; truncated: boolean };
 		};
 
 		expect(mod.toolNames).toEqual(["bash", "read", "grep", "find", "ls"]);
 		expect(mod.helperValues).toEqual({
 			maxLines: 3000,
-			language: "typescript",
-			highlighted: 1,
 			truncated: true,
 		});
 	});

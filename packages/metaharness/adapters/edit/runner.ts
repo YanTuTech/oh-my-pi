@@ -36,7 +36,6 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..");
 const RUNS_DIR = path.join(REPO_ROOT, "runs");
 const TMP = path.join(RUNS_DIR, `rb-${Math.random().toString(36).slice(2, 10)}`);
-const CLI_PATH = Bun.fileURLToPath(import.meta.resolve("@oh-my-pi/pi-coding-agent/cli"));
 
 function formatLogPath(logFile: string): string {
 	const relativePath = path.relative(REPO_ROOT, logFile);
@@ -112,7 +111,7 @@ export interface BenchmarkConfig {
 	maxProviderFailureRetries?: number;
 	mutationScopeWindow?: number;
 	conversationDumpDir?: string;
-	/** Use in-process agent sessions instead of spawning CLI subprocesses. Default: true */
+	/** Use in-process agent sessions instead of spawning the Runtime RPC host. Default: true */
 	inProcess?: boolean;
 }
 
@@ -1147,7 +1146,6 @@ async function runSingleTask(
 				})
 			: (() => {
 					const rpc = new RpcClient({
-						cliPath: CLI_PATH,
 						cwd,
 						provider: config.provider,
 						model: config.model,

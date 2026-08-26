@@ -126,7 +126,11 @@ try {
 
 		const first = spawnConsumer(firstProject, "profile-a", firstMarker);
 		try {
-			expect(await waitUntil(() => Bun.file(firstMarker).exists(), 15_000)).toBeTrue();
+			if (!(await waitUntil(() => Bun.file(firstMarker).exists(), 15_000))) {
+				first.stdin.end();
+				await first.exited;
+				throw new Error(`first relay consumer failed to become ready: ${await new Response(first.stderr).text()}`);
+			}
 			expect(await probeRelayServer(cdpUrl)).toBeTrue();
 
 			const second = spawnConsumer(secondProject, "profile-b", secondMarker);

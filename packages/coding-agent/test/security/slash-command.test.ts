@@ -6,7 +6,7 @@ import { refreshDirsFromEnv } from "@oh-my-pi/pi-utils";
 import { Settings } from "../../src/config/settings";
 import { SecurityStore } from "../../src/security";
 import { handleSecurityCommand } from "../../src/slash-commands/helpers/security";
-import type { SlashCommandRuntime } from "../../src/slash-commands/types";
+import type { SlashCommandRuntime } from "../../src/slash-commands/runtime-types";
 import type { ToolSession } from "../../src/tools";
 import { SecurityScanTool } from "../../src/tools/security-scan";
 

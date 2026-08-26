@@ -11,8 +11,8 @@ const files = ["agent.md", "tools/read.md"];
 const bodies = ["agent body", "read body"];
 const embedPayload = embed(files, bodies);
 
-// The embed path only runs in compiled binaries / the npm bundle; dev tests
-// otherwise exercise the disk fallback (empty placeholder), so a regression in
+// The generated embed path is used by the published Runtime package; dev tests
+// otherwise exercise the disk fallback, so a regression in
 // the two-line `<filenames>\n<gzip bodies>` parsing would ship broken `omp://`
 // docs undetected. These cover the populated-embed decode directly.
 describe("decodeDocsIndex (embedded docs path)", () => {
@@ -37,9 +37,8 @@ describe("decodeDocsIndex (embedded docs path)", () => {
 });
 
 describe("shipped docs embed (generator↔runtime contract)", () => {
-	// bundle-dist.ts writes buildDocsIndexPayload().payload to
-	// dist/docs-index.generated.txt, which docs-index.ts reads back via
-	// decodeDocsIndex for npm/SDK consumers. If the generator's encoding and the
+	// build-runtime.ts writes buildDocsIndexPayload().payload to the Runtime
+	// distribution, which docs-index.ts reads back via decodeDocsIndex. If the generator's encoding and the
 	// runtime decoder drift, the shipped embed silently fails to resolve, so
 	// assert the real generator output round-trips through the runtime decoder.
 	it("decodes the real generator payload with round-tripped filenames and bodies", async () => {

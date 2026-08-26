@@ -33,7 +33,7 @@ function securityEnabledFromContext(context?: ResolveContext): boolean | undefin
 }
 
 const SECURITY_DISABLED_MESSAGE =
-	"security:// is disabled. Enable it by setting `security.enabled = true` (Settings → Tools → Security).";
+	"security:// is disabled. Enable it by setting `security.enabled = true` in Runtime settings.";
 
 export class SecurityDisabledError extends Error {
 	constructor() {

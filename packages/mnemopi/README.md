@@ -91,15 +91,6 @@ Common environment fallbacks:
 
 Local embeddings use the `fastembed` npm package. Its default `BGESmallENV15` model is 384-dimensional and uses the package's CLS pooling plus vector normalization path. Local GGUF LLMs are not available in this package.
 
-## Commands
-
-```sh
-mnemopi remember "Use stable-cluster for production deploys"
-mnemopi recall "production deploy target"
-mnemopi stats
-mnemopi sleep
-```
-
 ## Tests
 
 ```sh

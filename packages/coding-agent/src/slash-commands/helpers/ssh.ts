@@ -2,7 +2,7 @@ import { getSSHConfigPath } from "@oh-my-pi/pi-utils";
 import { reset as resetCapabilities } from "../../capability";
 import { addSSHHost, readSSHConfigFile, removeSSHHost, type SSHHostConfig } from "../../ssh/config-writer";
 import { parseCommandArgs } from "../../utils/command-args";
-import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../types";
+import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../runtime-types";
 import { commandConsumed, errorMessage, parseNamedScopeArgs, parseSubcommand, usage } from "./parse";
 
 interface ParsedSshAddArgs {

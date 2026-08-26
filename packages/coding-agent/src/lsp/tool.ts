@@ -8,11 +8,10 @@ import type {
 	ToolApprovalDecision,
 } from "@oh-my-pi/pi-agent-core";
 import { logger, prompt, untilAborted } from "@oh-my-pi/pi-utils";
-import { type Theme, theme } from "../modes/theme/theme";
 import lspDescription from "../prompts/tools/lsp.md" with { type: "text" };
-import type { ToolSession } from "../tools";
 import { truncateForPrompt } from "../tools/approval";
 import { formatPathRelativeToCwd, resolveToCwd } from "../tools/path-utils";
+import type { ToolSession } from "../tools/runtime";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tools/tool-errors";
 import { clampTimeout } from "../tools/tool-timeouts";
 import {
@@ -149,7 +148,13 @@ async function enumerateRenamePairs(
 /**
  * LSP tool for language server protocol operations.
  */
-export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Theme> {
+const LSP_STATUS = {
+	success: "✔",
+	error: "✘",
+	warning: "⚠",
+} as const;
+
+export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails> {
 	readonly name = "lsp";
 	readonly approval = (args: unknown): ToolApprovalDecision => {
 		const rawAction = (args as Partial<LspParams>).action;
@@ -297,7 +302,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 			let totalServerSuccesses = 0;
 			if (truncatedGlobTargets) {
 				results.push(
-					`${theme.status.warning} Pattern matched more than ${MAX_GLOB_DIAGNOSTIC_TARGETS} files; showing first ${MAX_GLOB_DIAGNOSTIC_TARGETS}. Narrow the glob or use workspace diagnostics.`,
+					`${LSP_STATUS.warning} Pattern matched more than ${MAX_GLOB_DIAGNOSTIC_TARGETS} files; showing first ${MAX_GLOB_DIAGNOSTIC_TARGETS}. Narrow the glob or use workspace diagnostics.`,
 				);
 			}
 
@@ -306,7 +311,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 				const resolved = resolveToCwd(target, this.session.cwd);
 				const servers = getServersForFile(config, resolved);
 				if (servers.length === 0) {
-					results.push(`${theme.status.error} ${target}: No language server found`);
+					results.push(`${LSP_STATUS.error} ${target}: No language server found`);
 					continue;
 				}
 
@@ -380,7 +385,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 							content: [
 								{
 									type: "text",
-									text: `${theme.status.error} ${relPath}: all language servers failed (${failedServers.join(", ")})`,
+									text: `${LSP_STATUS.error} ${relPath}: all language servers failed (${failedServers.join(", ")})`,
 								},
 							],
 							details: { action, serverName: Array.from(allServerNames).join(", "), success: false },
@@ -390,7 +395,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					if (uniqueDiagnostics.length === 0) {
 						const text =
 							failedServers.length > 0
-								? `OK\n${theme.status.warning} some servers failed: ${failedServers.join(", ")}`
+								? `OK\n${LSP_STATUS.warning} some servers failed: ${failedServers.join(", ")}`
 								: "OK";
 						return {
 							content: [{ type: "text", text }],
@@ -402,7 +407,7 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 					const formatted = uniqueDiagnostics.map(d => formatDiagnostic(d, relPath));
 					let output = `${summary}:\n${formatGroupedDiagnosticMessages(formatted)}`;
 					if (failedServers.length > 0) {
-						output += `\n${theme.status.warning} some servers failed: ${failedServers.join(", ")}`;
+						output += `\n${LSP_STATUS.warning} some servers failed: ${failedServers.join(", ")}`;
 					}
 					return {
 						content: [{ type: "text", text: output }],
@@ -413,23 +418,23 @@ export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Them
 				if (uniqueDiagnostics.length === 0) {
 					if (succeededServers === 0) {
 						results.push(
-							`${theme.status.error} ${relPath}: all language servers failed (${failedServers.join(", ")})`,
+							`${LSP_STATUS.error} ${relPath}: all language servers failed (${failedServers.join(", ")})`,
 						);
 					} else {
-						results.push(`${theme.status.success} ${relPath}: no issues`);
+						results.push(`${LSP_STATUS.success} ${relPath}: no issues`);
 						if (failedServers.length > 0) {
 							results.push(
-								`${theme.status.warning} ${relPath}: some servers failed (${failedServers.join(", ")})`,
+								`${LSP_STATUS.warning} ${relPath}: some servers failed (${failedServers.join(", ")})`,
 							);
 						}
 					}
 				} else {
 					const summary = formatDiagnosticsSummary(uniqueDiagnostics);
-					results.push(`${theme.status.error} ${relPath}: ${summary}`);
+					results.push(`${LSP_STATUS.error} ${relPath}: ${summary}`);
 					const formatted = uniqueDiagnostics.map(d => formatDiagnostic(d, relPath));
 					results.push(formatGroupedDiagnosticMessages(formatted));
 					if (failedServers.length > 0) {
-						results.push(`${theme.status.warning} ${relPath}: some servers failed (${failedServers.join(", ")})`);
+						results.push(`${LSP_STATUS.warning} ${relPath}: some servers failed (${failedServers.join(", ")})`);
 					}
 				}
 			}

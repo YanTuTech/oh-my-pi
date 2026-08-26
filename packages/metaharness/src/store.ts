@@ -370,7 +370,7 @@ export class RunStore {
 		const tx = this.#db.transaction(() => {
 			// Prune rows whose trial dirs vanished from disk (a resume deletes
 			// interrupted trial dirs and re-runs the task under a fresh suffix) —
-			// otherwise phantom `running` rows haunt the dashboard forever.
+			// otherwise phantom `running` rows remain in the status API forever.
 			if (snapshot.traces.length > 0) {
 				const names = snapshot.traces.map(t => t.name);
 				this.#db

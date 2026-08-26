@@ -9,7 +9,7 @@ The marketplace system lets you discover, install, and manage plugins from Git, 
 /marketplace install wordpress.com@claude-plugins-official
 ```
 
-In the TUI, `/marketplace` with no arguments opens the interactive plugin browser. In ACP/RPC command handling, `/marketplace` lists configured marketplaces; use `/marketplace discover` to browse.
+In ACP/RPC command handling, `/marketplace` lists configured marketplaces; use `/marketplace discover` to browse.
 
 ## Concepts
 
@@ -28,12 +28,6 @@ On Linux and macOS, `omp config init-xdg` creates the XDG data, state, and cache
 
 ## Commands
 
-### Interactive mode
-
-| Command        | Effect                                    |
-| -------------- | ----------------------------------------- |
-| `/marketplace` | Open interactive plugin browser (install) |
-
 ### Marketplace management
 
 | Command                      | Effect                                       |
@@ -49,33 +43,14 @@ On Linux and macOS, `omp config init-xdg` creates the XDG data, state, and cache
 | ------------------------------------------------------------------------- | -------------------------------------------------- |
 | `/marketplace discover [marketplace]`                                     | Browse available plugins                           |
 | `/marketplace install [--force] [--scope user\|project] name@marketplace` | Install a plugin                                   |
-| `/marketplace uninstall [--scope user\|project] name@marketplace`         | Uninstall a plugin; no args opens the TUI selector |
+| `/marketplace uninstall [--scope user\|project] name@marketplace`         | Uninstall a plugin                                |
 | `/marketplace installed`                                                  | List installed marketplace plugins                 |
 | `/marketplace upgrade [--scope user\|project] [name@marketplace]`         | Upgrade one or all plugins                         |
 | `/plugins list`                                                           | List npm/link and marketplace plugins              |
 | `/plugins enable [--scope user\|project] name@marketplace`                | Enable a marketplace plugin                        |
 | `/plugins disable [--scope user\|project] name@marketplace`               | Disable a marketplace plugin                       |
 
-### CLI equivalents
-
-The same operations are available from the command line:
-
-```
-omp plugin marketplace add <source>
-omp plugin marketplace remove <name>
-omp plugin marketplace update [name]
-omp plugin marketplace list
-omp plugin discover [marketplace]
-omp plugin install [--force] [--scope user|project] name@marketplace
-omp plugin uninstall [--scope user|project] name@marketplace
-omp plugin upgrade [--scope user|project] [name@marketplace]
-omp plugin enable [--scope user|project] name@marketplace
-omp plugin disable [--scope user|project] name@marketplace
-omp plugin list
-
-```
-
-TUI marketplace mutations (explicit commands and the selector) update disk state and invalidate discovery caches but do not refresh the active session. Run `/reload-plugins` to refresh skills, slash commands, and MCP servers; restart the session for newly installed tools, hooks, or extension modules. ACP/RPC marketplace handlers refresh skills and slash commands automatically, but likewise do not rebuild every initialized capability set.
+ACP/RPC marketplace handlers update disk state, invalidate discovery caches, and refresh skills and slash commands automatically. They do not rebuild every initialized capability set; start a new session for newly installed tools, hooks, or extension modules.
 
 ## Marketplace sources
 

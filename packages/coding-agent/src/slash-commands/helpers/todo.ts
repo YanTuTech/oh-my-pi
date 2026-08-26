@@ -7,7 +7,7 @@ import {
 	resolveTodoMarkdownPath,
 	USER_TODO_EDIT_CUSTOM_TYPE,
 } from "../../tools/todo";
-import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../types";
+import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../runtime-types";
 import { commandConsumed, errorMessage, parseSubcommand, usage } from "./parse";
 
 type TodoMutationVerb = "done" | "drop" | "rm";
@@ -103,10 +103,7 @@ function commitTodos(runtime: SlashCommandRuntime, phases: TodoPhase[]): void {
 const TODO_HELP_TEXT = [
 	"Usage: /todo <verb> [args]",
 	"  /todo                              Show current todos",
-	"  /todo edit                         (TUI only) open in $EDITOR",
 	"  /todo copy                         Print todos as Markdown",
-	"  /todo expand                       (TUI only) expand the sticky HUD",
-	"  /todo collapse                     (TUI only) collapse the sticky HUD",
 	"  /todo export [<path>]              Write todos to file (default: TODO.md)",
 	"  /todo import [<path>]              Replace todos from file (default: TODO.md)",
 	"  /todo append [<phase>] <task...>   Append a task",
@@ -272,14 +269,6 @@ export async function handleTodoAcp(
 		case "drop":
 		case "rm":
 			return await handleTodoMutationCommand(verb, rest, runtime);
-		case "edit":
-			return usage(
-				"/todo edit requires the TUI editor; use /todo export then /todo import for non-interactive edits.",
-				runtime,
-			);
-		case "expand":
-		case "collapse":
-			return usage(`/todo ${verb} controls the interactive HUD and is unavailable in this mode.`, runtime);
 		case "help":
 		case "?":
 			await runtime.output(TODO_HELP_TEXT);

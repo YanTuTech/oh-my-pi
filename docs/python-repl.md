@@ -12,7 +12,7 @@ It covers tool behavior, runner lifecycle, environment handling, execution seman
 - Prelude helpers loaded into every kernel: `src/eval/py/prelude.py`
 - Host-side subagent helper bridge: `src/eval/agent-bridge.ts`
 - MIME bundle renderer (text + structured outputs): `src/eval/py/display.ts`
-- Interactive-mode renderer for user-triggered Python runs: `src/modes/components/eval-execution.ts`
+- Host-facing execution events and result formatting: `src/eval/py/`
 - Runtime/env filtering and Python resolution: `src/eval/py/runtime.ts`
 
 ## What eval's Python backend is
@@ -73,7 +73,7 @@ Runner → host:
 {"type": "done",     "id": "<reqId>", "status": "ok"|"error", "executionCount": N, "cancelled": false}
 ```
 
-Status events the prelude emits (e.g. `_emit_status("find", count=…)`) ship inside display bundles under `application/x-omp-status` so the existing TUI status renderer keeps working.
+Status events the prelude emits (e.g. `_emit_status("find", count=…)`) ship inside display bundles under `application/x-omp-status` and are exposed in structured Runtime details.
 
 ## Magics
 
@@ -202,16 +202,9 @@ The runner sets `MPLBACKEND=Agg` as an environ default so figures render off-scr
 
 Output is streamed through `OutputSink` and may be persisted to artifact storage. Tool results can include truncation metadata and `artifact://<id>` for full output recovery.
 
-### Renderer behavior
+### Host delivery
 
-- Tool renderer (`eval-render.ts`, re-exported from `eval.ts`):
-  - shows code-cell blocks with per-cell status
-  - collapsed preview defaults to 10 lines
-  - supports expanded mode for all output retained in the tool result
-- Interactive renderer (`eval-execution.ts`):
-  - used for user-triggered Python execution in TUI
-  - collapsed preview defaults to 20 lines
-  - clamps very long individual lines to 4000 chars for display safety
+The Runtime returns retained output content plus per-cell status, display bundles, truncation metadata, and optional artifact references. It does not bundle a Python execution renderer.
   - shows cancellation/error/truncation notices
 
 ## Operational troubleshooting

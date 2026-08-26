@@ -43,7 +43,6 @@ interface FakeAcpBuiltinSession {
 	markMovedFromEmptySessionFile(sessionFile: string): void;
 	fork(): Promise<boolean>;
 	handoff(instr?: string): Promise<{ document: string; savedPath?: string } | undefined>;
-	exportToHtml(outputPath?: string): Promise<string>;
 	getTodoPhases(): Array<{ name: string; tasks: Array<{ content: string; status: string }> }>;
 	setTodoPhases(phases: Array<{ name: string; tasks: Array<{ content: string; status: string }> }>): void;
 	refreshBaseSystemPrompt(): Promise<void>;
@@ -135,9 +134,6 @@ function createRuntime() {
 		},
 		async handoff(_instr?: string) {
 			return undefined;
-		},
-		async exportToHtml(outputPath?: string) {
-			return outputPath ?? "/tmp/exported-session.html";
 		},
 		getTodoPhases() {
 			return this._todoPhases;
@@ -614,31 +610,6 @@ describe("session lifecycle commands", () => {
 });
 
 describe("wave 3 commands", () => {
-	// /export
-	it("/export: calls exportToHtml with the given arg and outputs the path", async () => {
-		const { output, runtime } = createRuntime();
-		const result = await executeAcpBuiltinSlashCommand("/export /tmp/out.html", runtime);
-		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toBe("Session exported to: /tmp/out.html");
-	});
-
-	it("/export: uses default path when no arg given", async () => {
-		const { output, runtime } = createRuntime();
-		const result = await executeAcpBuiltinSlashCommand("/export", runtime);
-		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("Session exported to:");
-	});
-
-	it("/export: returns usage on exportToHtml failure", async () => {
-		const { output, session, runtime } = createRuntime();
-		session.exportToHtml = async () => {
-			throw new Error("disk full");
-		};
-		const result = await executeAcpBuiltinSlashCommand("/export", runtime);
-		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("Failed to export session: disk full");
-	});
-
 	// /todo
 	it("/todo no-args: outputs empty state message when no todos", async () => {
 		const { output, runtime } = createRuntime();
@@ -770,20 +741,6 @@ describe("wave 3 commands", () => {
 		expect(output[0]).toContain("Failed to read todos:");
 		expect(output[0]).toContain("internal scheme");
 		expect(session._todoPhases).toEqual([]);
-	});
-
-	it("/todo edit: returns TUI-only usage message", async () => {
-		const { output, runtime } = createRuntime();
-		const result = await executeAcpBuiltinSlashCommand("/todo edit", runtime);
-		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("TUI editor");
-	});
-
-	it("/todo expand: returns HUD-only usage message in ACP mode", async () => {
-		const { output, runtime } = createRuntime();
-		const result = await executeAcpBuiltinSlashCommand("/todo expand", runtime);
-		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("interactive HUD");
 	});
 
 	it("/todo unknown: returns usage message", async () => {
@@ -1011,18 +968,18 @@ describe("wave 4 commands", () => {
 		expect(output[0]).toContain("install");
 	});
 
-	it("/marketplace install (no args): returns interactive picker usage", async () => {
+	it("/marketplace install (no args): returns explicit usage", async () => {
 		const { output, runtime } = createRuntime();
 		const result = await executeAcpBuiltinSlashCommand("/marketplace install", runtime);
 		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("TUI-only");
+		expect(output[0]).toContain("Usage: /marketplace install");
 	});
 
-	it("/marketplace uninstall (no args): returns interactive picker usage", async () => {
+	it("/marketplace uninstall (no args): returns explicit usage", async () => {
 		const { output, runtime } = createRuntime();
 		const result = await executeAcpBuiltinSlashCommand("/marketplace uninstall", runtime);
 		expect(result).toEqual({ consumed: true });
-		expect(output[0]).toContain("TUI-only");
+		expect(output[0]).toContain("Usage: /marketplace uninstall");
 	});
 
 	// /plugins

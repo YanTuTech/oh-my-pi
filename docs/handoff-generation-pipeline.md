@@ -20,8 +20,7 @@ Does not cover:
 ## Implementation files
 
 - [`src/slash-commands/builtin-registry.ts`](../packages/coding-agent/src/slash-commands/builtin-registry.ts)
-- [`src/modes/controllers/command-controller.ts`](../packages/coding-agent/src/modes/controllers/command-controller.ts)
-- [`src/modes/controllers/input-controller.ts`](../packages/coding-agent/src/modes/controllers/input-controller.ts)
+- [`src/slash-commands/builtin-session.ts`](../packages/coding-agent/src/slash-commands/builtin-session.ts)
 - [`src/session/session-handoff.ts`](../packages/coding-agent/src/session/session-handoff.ts)
 - [`src/session/session-maintenance.ts`](../packages/coding-agent/src/session/session-maintenance.ts)
 - [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts)
@@ -31,8 +30,8 @@ Does not cover:
 ## Trigger path
 
 1. `/handoff` is declared in the builtin slash-command registry with optional inline hint `[focus instructions]`.
-2. The registry's TUI handler clears the editor and calls `handleHandoffCommand(customInstructions?)`.
-3. `CommandController.handleHandoffCommand` refuses while the current response is streaming, then counts `type === "message"` entries.
+2. The slash-command/RPC handler passes optional custom instructions to the session handoff operation.
+3. The handler refuses while the current response is streaming, then validates that the session has enough message history to hand off.
 4. If the count is `< 2`, it warns `Nothing to hand off (no messages yet)` and returns.
 
 The same minimum-content guard exists inside `SessionMaintenance.handoff()` and throws if violated. RPC separately refuses a handoff while streaming. Direct SDK callers must avoid invoking the session method during an active response.

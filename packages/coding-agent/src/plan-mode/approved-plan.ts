@@ -1,8 +1,8 @@
 import { normalizeLocalScheme } from "../tools/path-utils";
 import { ToolError } from "../tools/tool-errors";
 
-/** Shape forwarded from the plan-proposal handler to InteractiveMode's
- *  approval popup. Populated by the `xd://propose` dispatch when the agent
+/** Shape forwarded from the plan-proposal handler to the host's approval
+ *  mechanism. Populated by the `xd://propose` dispatch when the agent
  *  submits a plan for approval. `planFilePath` is the agent-chosen
  *  `local://<slug>-plan.md` artifact — it is never renamed on approval, so
  *  links to it stay valid for the session. */

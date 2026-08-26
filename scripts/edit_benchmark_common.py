@@ -627,10 +627,10 @@ class VerbosePrinter:
 
 
 def resolve_repo_omp_bin() -> str | None:
-    cli_path = REPO_ROOT / "packages/coding-agent" / "src/cli.ts"
-    if not cli_path.exists():
+    runtime_host_path = REPO_ROOT / "packages/coding-agent" / "src/runtime-rpc-host.ts"
+    if not runtime_host_path.exists():
         return None
-    return str(cli_path)
+    return str(runtime_host_path)
 
 
 def resolve_omp_bin(raw: str | None) -> str:
@@ -639,10 +639,10 @@ def resolve_omp_bin(raw: str | None) -> str:
     repo_bin = resolve_repo_omp_bin()
     if repo_bin:
         return repo_bin
-    found = shutil.which("omp")
+    found = shutil.which("omp-runtime-rpc-host")
     if not found:
         raise SystemExit(
-            "Could not find `omp` on PATH and could not resolve the repo CLI. Set --omp-bin or OMP_BIN."
+            "Could not find the Agent Runtime RPC host on PATH or in this checkout. Set --omp-bin or OMP_BIN."
         )
     return found
 
@@ -912,7 +912,7 @@ def parse_args(description: str) -> argparse.Namespace:
     parser.add_argument(
         "--omp-bin",
         default=os.environ.get("OMP_BIN"),
-        help="Executable to launch. Defaults to the repo checkout CLI, then falls back to `omp` on PATH.",
+        help="Runtime RPC host to launch. Defaults to this checkout, then `omp-runtime-rpc-host` on PATH.",
     )
     parser.add_argument(
         "--timeout", type=float, default=60.0, help="Per-turn timeout in seconds."

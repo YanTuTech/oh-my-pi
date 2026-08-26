@@ -8,7 +8,6 @@ import {
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { canonicalSnapshotKey, getFileSnapshotStore, recordSeenLines } from "../edit/file-snapshot-store";
 import { normalizeToLF } from "../edit/normalize";
-import { isMarkdownPath } from "../modes/theme/theme";
 import type { ToolSession } from "../sdk";
 import {
 	DEFAULT_MAX_BYTES,
@@ -19,6 +18,7 @@ import {
 } from "../session/streaming-output";
 import { buildLineEntriesWithBlockContext, type LineEntry, lineEntriesToPlainText } from "../utils/block-context";
 import { resolveFileDisplayMode } from "../utils/file-display-mode";
+import { isMarkdownPath } from "../utils/lang-from-path";
 import { formatPathRelativeToCwd, type LineRange } from "./path-utils";
 import type { ReadToolDetails } from "./read";
 import { formatBytes, shortenPath } from "./render-utils";

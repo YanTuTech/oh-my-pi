@@ -3,7 +3,7 @@
 Tool approval has three inputs:
 
 1. **Tool declaration** — every tool may declare an `approval` tier:
-   - `read`: reads data or updates UI-only session metadata.
+   - `read`: reads data or updates host-facing session metadata.
    - `write`: mutates workspace/session state but does not execute arbitrary code.
    - `exec`: executes code, shells out, drives a browser, spawns agents, or performs similarly broad actions.
 2. **Tool policy** — object-form declarations may set `policy: allow | deny | prompt`, optionally with `override` and a reason. This is used for argument-dependent safety/pattern rules.
@@ -143,7 +143,7 @@ Precedence is the normal settings precedence: runtime flags (`--approval-mode`, 
 
 `tools.approvalMode: yolo` fully applies to ACP when it is explicitly configured or supplied by a runtime flag. It skips OMP's approval prompts and also skips the ACP client permission gate for `bash`, `edit`, `delete`, and `move` unless `tools.approval.<tool>` is `prompt` or `deny`. The schema default is `yolo`, but default-config ACP sessions still keep the client permission gate; set `tools.approvalMode: yolo` explicitly when the client wants unattended execution.
 
-When ACP approval is required, OMP routes it through the ACP client instead of the terminal TUI. Client-gated `bash`, `edit`, `delete`, and `move` calls use ACP `session/request_permission`; generic approval prompts use form elicitation when the client advertises `elicitation.form`. A rejected, cancelled, or unsupported prompt rejects/cancels the tool call; OMP does not silently allow it.
+When ACP approval is required, OMP routes it through the ACP client. Client-gated `bash`, `edit`, `delete`, and `move` calls use ACP `session/request_permission`; generic approval prompts use form elicitation when the client advertises `elicitation.form`. A rejected, cancelled, or unsupported prompt rejects/cancels the tool call; OMP does not silently allow it.
 
 ## Subagents
 

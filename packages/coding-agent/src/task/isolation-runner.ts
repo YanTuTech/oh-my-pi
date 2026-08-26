@@ -21,7 +21,7 @@
 import * as path from "node:path";
 import type * as natives from "@oh-my-pi/pi-natives";
 import { AgentRegistry } from "../registry/agent-registry";
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import { generateCommitMessage } from "../utils/commit-message-generator";
 import * as git from "../utils/git";
 import { trackLateCleanup } from "../utils/late-cleanup";

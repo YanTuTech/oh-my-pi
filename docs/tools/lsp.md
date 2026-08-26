@@ -39,7 +39,7 @@
 - Single-shot `AgentToolResult`; `content` is always one text block: `[{ type: "text", text: string }]`.
 - `details` is `LspToolDetails`: `action`, `success`, optional `serverName`, optional original `request`.
 - Empty navigation/symbol lookups such as `No definition found` are additionally marked `useless: true` so compaction may elide them; a clean diagnostics result is retained as verification evidence.
-- No streaming updates, artifact URIs, or background jobs. The inline TUI renderer merges call and result, adds action-aware formatting, and supports collapsed/expanded views.
+- No streaming updates, artifact URIs, or background jobs. Results contain action-aware text plus structured details for RPC/SDK consumers.
 - The tool is discoverable rather than eagerly loaded. Read-only actions (`diagnostics`, navigation, hover, symbols, `status`, `capabilities`) request read approval; `rename`, `rename_file`, `code_actions`, `reload`, and `request` request write approval regardless of `apply`.
 - Many validation failures are returned as ordinary text results with `details.success: false`; aborts throw `ToolAbortError` instead.
 

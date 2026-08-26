@@ -16,7 +16,7 @@ import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import type { ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
 import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./runtime";
 import { ToolError, throwIfAborted } from "./tool-errors";
 import { clampTimeout } from "./tool-timeouts";
 

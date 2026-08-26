@@ -12,7 +12,7 @@ export interface MetricDefinition {
 	higherIsBetter: boolean;
 }
 
-/** Adapter metadata exposed to launch clients and the dashboard. */
+/** Adapter metadata exposed to launch clients and the headless API. */
 export interface BenchmarkDefinition {
 	kind: BenchmarkKind;
 	label: string;

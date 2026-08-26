@@ -11,12 +11,11 @@ type Mode =
 	| "workspace"
 	| "native"
 	| "coding-agent-singleton"
-	| "coding-agent-ui"
 	| "coding-agent-runtime"
 	| "coding-agent-native"
 	| "coding-agent-heavy";
 
-type CodingAgentBucket = "singleton" | "ui" | "runtime" | "native";
+type CodingAgentBucket = "singleton" | "runtime" | "native";
 
 interface TestCommand {
 	label: string;
@@ -55,7 +54,6 @@ const validModes: Record<Mode, true> = {
 	workspace: true,
 	native: true,
 	"coding-agent-singleton": true,
-	"coding-agent-ui": true,
 	"coding-agent-runtime": true,
 	"coding-agent-native": true,
 	"coding-agent-heavy": true,
@@ -67,17 +65,8 @@ const validModes: Record<Mode, true> = {
 // under the CI runner's OOM ceiling (a single 170–370-file invocation gets
 // SIGKILLed at 137). The singleton/global-state bucket is left whole: its suites
 // co-locate in one process to exercise process-wide state, so they must not split.
-//
-// The UI/TUI bucket uses a smaller chunk (5) than the others: its suites build up
-// native ghostty-vt cells, and bun 1.3.14's GC aborts (SIGTRAP/SIGABRT, exit
-// 133/134 inside DOMGCOutputConstraint marking) once ~10 such files share a heap,
-// even with the GC-marker knobs below. Bisection showed no single file is at
-// fault — the crash is cumulative heap volume. Under a 256MB-forced heap, a
-// 10-file chunk aborts ~50% of runs while either 5-file half is 0/20; halving the
-// chunk keeps each process under the threshold.
 const codingAgentBucketPlans: Record<CodingAgentBucket, { label: string; parallel: number; chunkSize?: number }> = {
 	singleton: { label: "singleton/global-state bucket", parallel: 1 },
-	ui: { label: "UI/TUI bucket", parallel: 1, chunkSize: 5 },
 	runtime: { label: "runtime/session bucket", parallel: 1, chunkSize: 10 },
 	native: { label: "native/tooling/browser/unit bucket", parallel: 1, chunkSize: 10 },
 };
@@ -100,16 +89,7 @@ const fastWorkspacePackages = [
 // These suites cover the native package, TUI/browser-ish behavior, local servers,
 // or coding-agent-adjacent benchmark paths. Keep them low-concurrency and in jobs
 // that have downloaded the Linux x64 native addon artifacts.
-const nativeAndIntegrationPackages = [
-	"packages/natives",
-	"packages/tui",
-	"packages/collab-web",
-	"packages/typescript-edit-benchmark",
-];
-
-// Packages the CI buckets deliberately skip but a local full run should still
-// cover. robomp-web lives under python/robomp and is outside every CI TS bucket.
-const localOnlyWorkspacePackages = ["python/robomp/web"];
+const nativeAndIntegrationPackages = ["packages/natives", "packages/collab-web", "packages/typescript-edit-benchmark"];
 
 const codingAgentNativePathPatterns = [
 	/(^|\/)[^/]*(bash|native|browser|cmux|mnemopi|hindsight|memory)[^/]*\.test\.ts$/i,
@@ -126,11 +106,6 @@ const codingAgentNativePathPatterns = [
 const codingAgentSingletonPathPatterns = [
 	/^test\/(settings|config|fast-mode-scope|autocomplete-max-visible)[^/]*\.test\.ts$/,
 	/^test\/[^/]*(singleton|global-state|fake-timer)[^/]*\.test\.ts$/,
-];
-
-const codingAgentUiPathPatterns = [
-	/^test\/modes\//,
-	/^test\/(interactive-mode|main-interactive|input-controller|streaming|status-line|keybindings|editor|hook|theme|setup-wizard|job-renderer|tool-args-reveal|tool-execution)[^/]*\.test\.ts$/,
 ];
 
 const codingAgentRuntimePathPatterns = [
@@ -179,16 +154,6 @@ const codingAgentSingletonContentPatterns = [
 	/(^|[^\w$.])(process\.env|Bun\.env)\[[^\]]+\]\s*=/,
 	/delete\s+(process\.env|Bun\.env)(\.[A-Za-z0-9_]+|\[[^\]]+\])/,
 	/Object\.assign\((process\.env|Bun\.env),/,
-];
-
-const codingAgentUiContentMarkers = [
-	"@oh-my-pi/pi-tui",
-	"InteractiveMode",
-	"InputController",
-	"StatusLine",
-	"ToolExecutionComponent",
-	"render(",
-	"renderToString",
 ];
 
 const codingAgentRuntimeContentMarkers = ["AgentSession", "SessionManager", "AuthStorage", "Bun.sleep", "setTimeout("];
@@ -261,9 +226,6 @@ function classifyCodingAgentTest(testFile: string, content: string): CodingAgent
 	) {
 		return "native";
 	}
-	if (matchesAnyPath(testFile, codingAgentUiPathPatterns) || hasAnyMarker(content, codingAgentUiContentMarkers)) {
-		return "ui";
-	}
 	if (
 		matchesAnyPath(testFile, codingAgentSingletonPathPatterns) ||
 		hasAnyMarker(content, codingAgentSingletonContentMarkers) ||
@@ -317,7 +279,11 @@ async function codingAgentTestCommands(bucket: CodingAgentBucket): Promise<TestC
 		commands.push({
 			label: `packages/coding-agent (${plan.label}; ${testFiles.length} files; parallel=${plan.parallel}${chunkLabel}; ${chunk.length} files)`,
 			cwd: "packages/coding-agent",
-			command: ["bun", "test", ...onlyFailuresArgs, ...chunk],
+			// Bun resolves bunfig.toml from the child cwd, so coding-agent chunks
+			// must name the repository policy preload explicitly. Without this,
+			// context reads correctly fail closed and discovery tests lose all
+			// file-backed capabilities.
+			command: ["bun", "test", "--preload", "./test/policy-test-harness.ts", ...onlyFailuresArgs, ...chunk],
 			parallel: plan.parallel,
 		});
 	}
@@ -332,8 +298,6 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 			return nativeAndIntegrationPackages.map(pkg => workspaceTestCommand(pkg, 4));
 		case "coding-agent-singleton":
 			return await codingAgentTestCommands("singleton");
-		case "coding-agent-ui":
-			return await codingAgentTestCommands("ui");
 		case "coding-agent-runtime":
 			return await codingAgentTestCommands("runtime");
 		case "coding-agent-native":
@@ -341,7 +305,6 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 		case "coding-agent-heavy":
 			return [
 				...(await codingAgentTestCommands("singleton")),
-				...(await codingAgentTestCommands("ui")),
 				...(await codingAgentTestCommands("runtime")),
 				...(await codingAgentTestCommands("native")),
 			];
@@ -352,15 +315,13 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 				...(await commandsForMode("coding-agent-heavy")),
 			];
 		// `local-ts` is the full local TypeScript run that root `bun run test:ts`
-		// drives: every package the old `--workspaces` fan-out covered (the CI
-		// `all` set plus robomp-web, which CI omits), routed through
+		// drives: every package the old `--workspaces` fan-out covered, routed through
 		// this one quiet runner so the whole suite shares one progress stream and
 		// one failure report. Repo script tests remain available via `test:scripts`.
 		case "local-ts":
 			return [
 				...fastWorkspacePackages.map(pkg => workspaceTestCommand(pkg, 8, { extraArgs: onlyFailuresArgs })),
 				...nativeAndIntegrationPackages.map(pkg => workspaceTestCommand(pkg, 4, { extraArgs: onlyFailuresArgs })),
-				...localOnlyWorkspacePackages.map(pkg => workspaceTestCommand(pkg, 4, { extraArgs: onlyFailuresArgs })),
 				...(await commandsForMode("coding-agent-heavy")),
 			];
 		// `local` is what root `bun run test` drives: the full TS suite plus the

@@ -10,7 +10,7 @@ import {
 } from "../task/structured-subagent";
 import type { AgentProgress, SingleResult } from "../task/types";
 import type { NestedRepoPatch } from "../task/worktree";
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import { ToolError } from "../tools/tool-errors";
 import { withBridgeTimeoutPause } from "./bridge-timeout";
 import type { JsStatusEvent } from "./js/shared/types";

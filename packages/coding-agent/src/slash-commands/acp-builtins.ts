@@ -1,9 +1,9 @@
 import type { AvailableCommand } from "@oh-my-pi/pi-utils/acp";
 import { BUILTIN_SLASH_COMMANDS_INTERNAL, lookupBuiltinSlashCommand } from "./builtin-registry";
 import { parseSlashCommand } from "./helpers/parse";
-import type { AcpBuiltinSlashCommandResult, SlashCommandRuntime } from "./types";
+import type { AcpBuiltinSlashCommandResult, SlashCommandRuntime } from "./runtime-types";
 
-export type { AcpBuiltinSlashCommandResult } from "./types";
+export type { AcpBuiltinSlashCommandResult } from "./runtime-types";
 
 /**
  * All names (primary + aliases) that are reserved by ACP builtins. Used to

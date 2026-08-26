@@ -95,7 +95,7 @@ function getProfileFromEnv(): string | undefined {
  * OMP_PROFILE/PI_PROFILE value does NOT throw here — a bad env var must not
  * crash a bare `import` of this module with an uncaught stack trace before the
  * CLI's error handling is in scope. The default profile is used instead; the
- * CLI re-validates the env (see `runCli` in coding-agent/src/cli.ts) so the
+ * Runtime hosts re-validate the env before constructing a session so the
  * user still gets a clean "Invalid OMP profile" message.
  */
 function readProfileFromEnvSafe(): string | undefined {

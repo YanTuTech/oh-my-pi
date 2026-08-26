@@ -34,26 +34,23 @@ describe("legacy pi compat package-root override validation (issue #2168)", () =
 			"@oh-my-pi/pi-ai": "/tmp/exists-ai.js",
 			"@oh-my-pi/pi-coding-agent": "/tmp/exists-shim.js",
 			"@oh-my-pi/pi-utils": "/$bunfs/root/packages/utils/src/index.js",
-			"@oh-my-pi/pi-tui": "/$bunfs/root/packages/tui/src/index.js",
 		};
-		const missing = new Set(["/$bunfs/root/packages/utils/src/index.js", "/$bunfs/root/packages/tui/src/index.js"]);
+		const missing = new Set(["/$bunfs/root/packages/utils/src/index.js"]);
 		const result = __validateLegacyPiPackageRootOverrides(candidates, p => !missing.has(p));
 		expect(result).toEqual({
 			"@oh-my-pi/pi-ai": "/tmp/exists-ai.js",
 			"@oh-my-pi/pi-coding-agent": "/tmp/exists-shim.js",
 		});
-		// `pi-utils` and `pi-tui` are absent so the resolver falls through to
+		// `pi-utils` is absent so the resolver falls through to
 		// `getResolvedSpecifier` (which throws under bunfs), which triggers
 		// the catch in `rewriteLegacyPiImports` that leaves the specifier
 		// unchanged for native `node_modules` resolution.
 		expect(result).not.toHaveProperty("@oh-my-pi/pi-utils");
-		expect(result).not.toHaveProperty("@oh-my-pi/pi-tui");
 	});
 
 	it("drops every override when none of the filesystem targets exist", () => {
 		const candidates = {
 			"@oh-my-pi/pi-utils": "/$bunfs/root/packages/utils/src/index.js",
-			"@oh-my-pi/pi-tui": "/$bunfs/root/packages/tui/src/index.js",
 		};
 		const result = __validateLegacyPiPackageRootOverrides(candidates, () => false);
 		expect(result).toEqual({});
@@ -70,7 +67,6 @@ describe("legacy pi compat package-root override validation (issue #2168)", () =
 			"@oh-my-pi/pi-coding-agent": "omp-legacy-pi-bundled:@oh-my-pi/pi-coding-agent",
 			"@oh-my-pi/pi-agent-core": "omp-legacy-pi-bundled:@oh-my-pi/pi-agent-core",
 			"@oh-my-pi/pi-natives": "omp-legacy-pi-bundled:@oh-my-pi/pi-natives",
-			"@oh-my-pi/pi-tui": "omp-legacy-pi-bundled:@oh-my-pi/pi-tui",
 			"@oh-my-pi/pi-utils": "omp-legacy-pi-bundled:@oh-my-pi/pi-utils",
 		};
 		const result = __validateLegacyPiPackageRootOverrides(candidates, () => {
@@ -85,10 +81,8 @@ describe("legacy pi compat package-root override validation (issue #2168)", () =
 		const candidates = {
 			"@oh-my-pi/pi-ai": "omp-legacy-pi-bundled:@oh-my-pi/pi-ai",
 			"@oh-my-pi/pi-coding-agent": "/dev/source/legacy-pi-coding-agent-shim.ts",
-			"@oh-my-pi/pi-tui": "/missing/path.ts",
 		};
-		const missing = new Set(["/missing/path.ts"]);
-		const result = __validateLegacyPiPackageRootOverrides(candidates, p => !missing.has(p));
+		const result = __validateLegacyPiPackageRootOverrides(candidates, () => true);
 		expect(result).toEqual({
 			"@oh-my-pi/pi-ai": "omp-legacy-pi-bundled:@oh-my-pi/pi-ai",
 			"@oh-my-pi/pi-coding-agent": "/dev/source/legacy-pi-coding-agent-shim.ts",

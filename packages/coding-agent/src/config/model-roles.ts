@@ -2,7 +2,6 @@
  * Built-in model roles and role metadata helpers.
  */
 
-import { isValidThemeColor, type ThemeColor } from "../modes/theme/theme";
 import type { Settings } from "./settings";
 
 /** Canonical prefix for a configured model role selector. */
@@ -34,22 +33,21 @@ export type ModelRole =
 export interface ModelRoleInfo {
 	tag?: string;
 	name: string;
-	color?: ThemeColor;
-	/** If true, the role is functional but not shown in the model selector UI. */
+	/** If true, the role remains functional but is excluded from model cycling. */
 	hidden?: boolean;
 }
 
 export const MODEL_ROLES: Record<ModelRole, ModelRoleInfo> = {
-	default: { tag: "DEFAULT", name: "Default", color: "success" },
-	smol: { tag: "SMOL", name: "Fast", color: "warning" },
-	slow: { tag: "SLOW", name: "Thinking", color: "accent" },
-	vision: { tag: "VISION", name: "Vision", color: "error" },
-	plan: { tag: "PLAN", name: "Architect", color: "muted" },
-	designer: { tag: "DESIGNER", name: "Designer", color: "muted" },
-	commit: { tag: "COMMIT", name: "Commit", color: "dim" },
-	tiny: { tag: "TINY", name: "Tiny", color: "dim" },
-	task: { tag: "TASK", name: "Subtask", color: "muted" },
-	advisor: { tag: "ADVISOR", name: "Advisor", color: "accent" },
+	default: { tag: "DEFAULT", name: "Default" },
+	smol: { tag: "SMOL", name: "Fast" },
+	slow: { tag: "SLOW", name: "Thinking" },
+	vision: { tag: "VISION", name: "Vision" },
+	plan: { tag: "PLAN", name: "Architect" },
+	designer: { tag: "DESIGNER", name: "Designer" },
+	commit: { tag: "COMMIT", name: "Commit" },
+	tiny: { tag: "TINY", name: "Tiny" },
+	task: { tag: "TASK", name: "Subtask" },
+	advisor: { tag: "ADVISOR", name: "Advisor" },
 };
 
 export const MODEL_ROLE_IDS: ModelRole[] = [
@@ -65,10 +63,8 @@ export const MODEL_ROLE_IDS: ModelRole[] = [
 	"advisor",
 ];
 
-export type RoleInfo = ModelRoleInfo;
-
 /**
- * Return the canonical set of known roles for selector/carousel UI.
+ * Return the canonical set of known roles for runtime model cycling.
  *
  * Built-ins always come first. Configured cycle order, model assignments, and
  * tag metadata can introduce additional custom roles without requiring duplicate
@@ -88,26 +84,4 @@ export function getKnownRoleIds(settings: Settings): string[] {
 	for (const role in settings.get("modelTags")) addRole(role);
 
 	return roles;
-}
-
-/**
- * Get role info for a role name (built-in or custom).
- * Configured metadata overrides built-in defaults when present.
- */
-export function getRoleInfo(role: string, settings: Settings): RoleInfo {
-	const builtIn = role in MODEL_ROLES ? MODEL_ROLES[role as ModelRole] : undefined;
-	const configured = settings.get("modelTags")[role];
-
-	if (configured) {
-		return {
-			tag: builtIn?.tag,
-			name: configured.name || builtIn?.name || role,
-			color: configured.color && isValidThemeColor(configured.color) ? configured.color : builtIn?.color,
-			hidden: configured.hidden ?? builtIn?.hidden,
-		};
-	}
-
-	if (builtIn) return builtIn;
-
-	return { name: role, color: "muted" };
 }

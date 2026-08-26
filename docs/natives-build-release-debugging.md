@@ -164,7 +164,7 @@ No toolchain setup steps are required for native jobs: bazelisk is on the GitHub
 
 ### Hosted cache warmer
 
-`.github/workflows/bazel-cache-warm.yml` seeds the GitHub-hosted caches that have no other reliable producer: the `release-darwin-*` bazel disk caches (built on the same macOS images as the `release_binary_darwin` matrix, so a release's bazel build is the version-bump delta instead of a ~40-min cold graph) and the shared bun store entry PR jobs restore but never save. It triggers only on pushes that can change those archives (crate/bazel/lock inputs, `bun.lock`, `.github/**`).
+`.github/workflows/bazel-cache-warm.yml` seeds the GitHub-hosted caches that have no other reliable producer: the `release-darwin-*` bazel disk caches (built on the same macOS images as the `release_native_darwin` matrix, so a release's bazel build is the version-bump delta instead of a cold graph) and the shared bun store entry PR jobs restore but never save. It triggers only on pushes that can change those archives (crate/bazel/lock inputs, `bun.lock`, `.github/**`).
 
 ### `bazel-cache` action (`.github/actions/bazel-cache`)
 
@@ -183,7 +183,7 @@ Hosted disk caches use `bazel-disk-v3-<scope>-<os>-<arch>-<config-hash>-<source-
 
 ### Release binary builds and publishing
 
-Binary builds are build-only and run in parallel with the test fan-out. `release_binary` (Linux + Windows matrices) needs only `native_addons`, whose workflow artifact supplies their addons. `release_binary_darwin` needs only `release_metadata` and starts the moment a release run is detected: darwin artifacts cannot be cross-built on Linux, so each macOS leg builds its own architecture through `bazel-natives` with scope `release-<target_id>` (seeded near HEAD by the warm workflow — normally just the version-bump delta), then `bun run ci:release:build-binaries` embeds and compiles the executable. Publishing is held behind `release_gate` (the aggregate of every validation job): `release_native_leaves` downloads all built addons and publishes the five `@oh-my-pi/pi-natives-<tag>` leaves from one linux runner, and the GitHub release / verify / core npm chain runs beside it.
+Native addon builds run in parallel with the test fan-out. Linux and Windows addons come from `native_addons`; Darwin artifacts cannot be cross-built on Linux, so `release_native_darwin` builds each macOS architecture through `bazel-natives` with scope `release-<target_id>`. Publishing is held behind `release_gate`: `release_native_leaves` downloads all addons and publishes the five `@oh-my-pi/pi-natives-<tag>` leaves, then npm publishes the Runtime packages. The workflow no longer builds standalone executables.
 
 ## Debugging playbook
 

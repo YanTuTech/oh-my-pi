@@ -11,60 +11,51 @@ import type {
 import type { ComputerSafetyCheck, ImageContent, Static, TextContent, TSchema } from "@oh-my-pi/pi-ai";
 import { sanitizeText, untilAborted } from "@oh-my-pi/pi-utils";
 import type { Settings } from "../../config/settings";
-import type { Theme } from "../../modes/theme/theme";
 import { type ApprovalMode, formatApprovalPrompt, resolveApproval, truncateForPrompt } from "../../tools/approval";
 import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import { withFileMutationSession } from "../../tools/file-write-fallback";
 import { normalizeToolEventInput, resolveToolEventInput } from "../tool-event-input";
 import { applyToolProxy } from "../tool-proxy";
+import type { Theme } from "../ui-contract";
 import type { ExtensionRunner } from "./runner";
-import type { RegisteredTool, ToolCallEventResult } from "./types";
+import type { RegisteredTool, ToolCallEventResult, ToolDefinition } from "./types";
 
 /**
  * Adapts a RegisteredTool into an AgentTool.
  */
-export class RegisteredToolAdapter implements AgentTool<any, any, any> {
+export class RegisteredToolAdapter<TParams extends TSchema = TSchema, TDetails = unknown>
+	implements AgentTool<TParams, TDetails, Theme>
+{
 	declare name: string;
 	declare description: string;
-	declare parameters: any;
+	declare parameters: TParams;
 	declare label: string;
 	declare strict: boolean;
 
-	renderCall?: (args: any, options: any, theme: any) => any;
-	renderResult?: (result: any, options: any, theme: any, args?: any) => any;
+	renderCall?: NonNullable<ToolDefinition<TParams, TDetails>["renderCall"]>;
+	renderResult?: NonNullable<ToolDefinition<TParams, TDetails>["renderResult"]>;
 	readonly loadMode: ToolLoadMode;
 
 	constructor(
-		private registeredTool: RegisteredTool,
+		private registeredTool: RegisteredTool<TParams, TDetails>,
 		private runner: ExtensionRunner,
 	) {
 		applyToolProxy(registeredTool.definition, this);
 		this.loadMode = defaultLoadModeForToolName(registeredTool.definition.name, registeredTool.definition.loadMode);
-
-		// Only define render methods when the underlying definition provides them.
-		// If these exist unconditionally on the prototype, ToolExecutionComponent
-		// enters the custom-renderer path, gets undefined back, and silently
-		// discards tool result text (extensions without renderers show blank).
-		if (registeredTool.definition.renderCall) {
-			this.renderCall = (args: any, options: any, theme: any) =>
-				registeredTool.definition.renderCall!(args, options, theme as Theme);
+		const { renderCall, renderResult } = registeredTool.definition;
+		if (renderCall) {
+			this.renderCall = (args, options, theme) => renderCall(args, options, theme);
 		}
-		if (registeredTool.definition.renderResult) {
-			this.renderResult = (result: any, options: any, theme: any, args?: any) =>
-				registeredTool.definition.renderResult!(
-					result,
-					{ expanded: options.expanded, isPartial: options.isPartial, spinnerFrame: options.spinnerFrame },
-					theme as Theme,
-					args,
-				);
+		if (renderResult) {
+			this.renderResult = (result, options, theme, args) => renderResult(result, options, theme, args);
 		}
 	}
 
 	async execute(
 		toolCallId: string,
-		params: any,
+		params: Static<TParams>,
 		signal?: AbortSignal,
-		onUpdate?: AgentToolUpdateCallback<any>,
+		onUpdate?: AgentToolUpdateCallback<TDetails, TParams>,
 		context?: AgentToolContext,
 	) {
 		// Bind the extension context to this tool's own name so `ctx.invokeTool` delegates to the
@@ -91,14 +82,20 @@ export class RegisteredToolAdapter implements AgentTool<any, any, any> {
 /**
  * Backward-compatible factory function wrapper.
  */
-export function wrapRegisteredTool(registeredTool: RegisteredTool, runner: ExtensionRunner): AgentTool {
+export function wrapRegisteredTool(
+	registeredTool: RegisteredTool,
+	runner: ExtensionRunner,
+): AgentTool<TSchema, unknown, Theme> {
 	return new RegisteredToolAdapter(registeredTool, runner);
 }
 
 /**
  * Wrap all registered tools into AgentTools.
  */
-export function wrapRegisteredTools(registeredTools: RegisteredTool[], runner: ExtensionRunner): AgentTool[] {
+export function wrapRegisteredTools(
+	registeredTools: RegisteredTool[],
+	runner: ExtensionRunner,
+): AgentTool<TSchema, unknown, Theme>[] {
 	return registeredTools.map(rt => wrapRegisteredTool(rt, runner));
 }
 
@@ -143,8 +140,8 @@ function safetyCheckLines(checks: readonly ComputerSafetyCheck[]): string[] {
  * - Emits tool_call event before execution (can block)
  * - Emits tool_result event after execution (can modify result)
  */
-export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetails = unknown>
-	implements AgentTool<TParameters, TDetails>
+export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetails = unknown, TTheme = unknown>
+	implements AgentTool<TParameters, TDetails, TTheme>
 {
 	declare name: string;
 	declare description: string;
@@ -153,7 +150,7 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 	declare strict: boolean;
 
 	constructor(
-		private tool: AgentTool<TParameters, TDetails>,
+		private tool: AgentTool<TParameters, TDetails, TTheme>,
 		private runner: ExtensionRunner,
 	) {
 		applyToolProxy(tool, this);

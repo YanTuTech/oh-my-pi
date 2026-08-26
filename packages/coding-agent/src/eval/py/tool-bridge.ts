@@ -8,7 +8,7 @@
  * `callSessionTool` implementation the JS bridge uses.
  */
 import { logger } from "@oh-my-pi/pi-utils";
-import type { ToolSession } from "../../tools";
+import type { ToolSession } from "../../tools/runtime";
 import { callSessionTool, type JsStatusEvent } from "../js/tool-bridge";
 
 export interface PyToolBridgeEntry {

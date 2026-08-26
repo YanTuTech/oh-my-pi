@@ -6,7 +6,6 @@
 - Entry: `packages/coding-agent/src/tools/inspect-image.ts`
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/inspect-image.md`
 - Key collaborators:
-  - `packages/coding-agent/src/tools/inspect-image-renderer.ts` — TUI call/result rendering.
   - `packages/coding-agent/src/utils/image-loading.ts` — path resolution, type detection, size gate, optional resize.
   - `packages/coding-agent/src/utils/image-resize.ts` — downscale and recompress oversized images.
   - `packages/coding-agent/src/tools/path-utils.ts` — resolve input path relative to session cwd.
@@ -30,13 +29,6 @@ The tool returns a single `AgentToolResult`:
 
 Model-visible output is single-shot, not streamed by this tool.
 
-TUI rendering adds presentation-only truncation from `packages/coding-agent/src/tools/inspect-image-renderer.ts`:
-
-- call preview truncates `question` to 100 columns,
-- result view shows 4 lines collapsed or 16 lines expanded,
-- each rendered output line is truncated to 120 columns,
-- footer metadata shows `model · mimeType` when present.
-
 ## Flow
 1. `InspectImageTool.execute(...)` rejects immediately if `images.blockImages` is enabled in session settings.
 2. It reads `session.modelRegistry`; missing registry, empty registry, missing API key, or unresolved model each raise `ToolError` from `packages/coding-agent/src/tools/inspect-image.ts`.
@@ -52,7 +44,7 @@ TUI rendering adds presentation-only truncation from `packages/coding-agent/src/
 10. `systemPrompt` is a one-element array rendered from `packages/coding-agent/src/prompts/tools/inspect-image-system.md`; telemetry is tagged with oneshot kind `inspect_image`. The request carries the thinking effort selected on the resolved vision/default model role.
 11. The model call uses the caller signal plus `inspect_image.timeoutMs` (default 300,000 ms); `0` disables this timeout. Provider errors, aborts, and timeouts become `ToolError`s.
 12. `extractTextContent(...)` from `packages/coding-agent/src/commit/utils.ts` concatenates only `text` content blocks from the assistant message, trims the result, and the tool fails if nothing remains.
-13. Success returns the text plus `details`; `inspectImageToolRenderer` formats the result for the TUI.
+13. Success returns the complete text plus structured `details` for RPC/SDK consumers.
 
 ## Modes / Variants
 - **Original image path**: `images.autoResize` disabled. The original file bytes are base64-encoded and sent with the detected MIME type.

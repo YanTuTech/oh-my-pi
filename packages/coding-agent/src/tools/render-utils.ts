@@ -9,18 +9,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ToolCallContext } from "@oh-my-pi/pi-agent-core";
 import type { Ellipsis } from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { getKeybindings, replaceTabs, truncateToWidth } from "@oh-my-pi/pi-tui";
 import { pluralize } from "@oh-my-pi/pi-utils";
-import { formatKeyHints, type KeyId } from "../config/keybindings";
+import { replaceTabs, truncateToWidth } from "@oh-my-pi/pi-utils/display-text";
 import { isSettingsInitialized, settings } from "../config/settings";
 import { getDefault } from "../config/settings-schema";
-import type { Theme } from "../modes/theme/theme";
-import { Hasher } from "../tui/utils";
+import type { Component, Theme } from "../extensibility/ui-contract";
+import { Hasher } from "../utils/hasher";
 import { formatDimensionNote, type ResizedImage } from "../utils/image-resize";
 
 export { Ellipsis } from "@oh-my-pi/pi-natives";
-export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-tui";
+export { replaceTabs, truncateToWidth, wrapTextWithAnsi } from "@oh-my-pi/pi-utils/display-text";
 
 // =============================================================================
 // Standardized Display Constants
@@ -70,8 +68,6 @@ export const PREVIEW_LIMITS = {
 } as const;
 
 /** Default number of terminal output rows shown before expansion. */
-export const DEFAULT_TERMINAL_PREVIEW_LINES = 10;
-
 /** Truncation lengths for different content types */
 export const TRUNCATE_LENGTHS = {
 	/** Short titles, labels */
@@ -88,15 +84,9 @@ export const TRUNCATE_LENGTHS = {
 	RECAP: 280,
 } as const;
 
-/** Keybinding action that toggles tool-output expansion. */
-const EXPAND_ACTION = "app.tools.expand";
-/** Fallback key when no binding is resolvable (e.g. outside an interactive session). */
-const DEFAULT_EXPAND_KEY: KeyId = "ctrl+o";
-
-/** Human-readable key currently bound to tool-output expansion, e.g. `Ctrl+O`. */
+/** Human-readable default key for tool-output expansion. */
 export function expandKeyHint(): string {
-	const keys = getKeybindings().getKeys(EXPAND_ACTION);
-	return formatKeyHints(keys.length > 0 ? keys : [DEFAULT_EXPAND_KEY]);
+	return "Ctrl+O";
 }
 
 // =============================================================================
@@ -283,19 +273,7 @@ export function formatEmptyMessage(message: string, theme: Theme): string {
 // Code Frame Formatting
 // =============================================================================
 
-export type CodeFrameMarker = "" | " " | "*" | "+" | "-" | ">";
-
-export function formatCodeFrameLine(
-	marker: CodeFrameMarker,
-	lineNumber: string | number,
-	content: string,
-	lineNumberWidth: number,
-): string {
-	const markerText = marker.trim();
-	const lineNumberText = String(lineNumber).trim();
-	const gutterText = markerText && lineNumberText ? `${markerText}${lineNumberText}` : lineNumberText || markerText;
-	return `${gutterText.padStart(lineNumberWidth + 1, " ")}│${content}`;
-}
+export * from "./code-frame";
 
 // =============================================================================
 // Tool UI Helpers
@@ -850,9 +828,7 @@ export function createCachedComponent(
  * Field-wise comparison instead of a concatenated key string: a cache hit costs
  * one string value-compare (engines short-circuit on length) and a miss never
  * allocates a key. Comparing the {@link Theme} by reference is sound because
- * theme switches replace the instance wholesale (`setTheme`/`previewTheme`/
- * `setSymbolPreset` in modes/theme/theme.ts) — themes are never mutated in
- * place.
+ * hosts replace theme objects wholesale rather than mutating them in place.
  */
 export interface RenderedStringCache {
 	theme: Theme | null;

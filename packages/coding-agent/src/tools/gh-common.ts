@@ -2,9 +2,9 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { untilAborted } from "@oh-my-pi/pi-utils";
 import * as git from "../utils/git";
-import type { ToolSession } from ".";
 import type { GhToolDetails } from "./gh";
 import type { GhLabel, GhUser } from "./gh-types";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

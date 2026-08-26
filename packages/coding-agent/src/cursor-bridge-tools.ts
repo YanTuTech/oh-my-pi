@@ -12,8 +12,8 @@ import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { EditTool } from "./edit";
 import type { ExtensionRunner } from "./extensibility/extensions";
 import { ExtensionToolWrapper } from "./extensibility/extensions";
-import type { GrepToolOptions, Tool, ToolSession } from "./tools";
-import { GrepTool } from "./tools";
+import { GrepTool, type GrepToolOptions } from "./tools/grep";
+import type { Tool, ToolSession } from "./tools/runtime";
 
 /**
  * Build the bridge's `createGrepTool` factory for one tool session.

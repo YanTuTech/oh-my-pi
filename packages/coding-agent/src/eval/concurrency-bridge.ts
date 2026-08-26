@@ -5,7 +5,7 @@
  * setting so an eval fan-out runs as wide as a `task` tool batch would. `0` means
  * unbounded — run every item at once, exactly like `task.maxConcurrency = 0`.
  */
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import type { JsStatusEvent } from "./js/shared/types";
 
 /** Synthetic bridge name reserved for the parallel-pool ceiling across both runtimes. */

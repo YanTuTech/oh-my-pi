@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_BYTES, OutputSink } from "../../session/streaming-output";
-import type { ToolSession } from "../../tools";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "../../tools/output-meta";
+import type { ToolSession } from "../../tools/runtime";
 import { isEvalTimeoutControlEvent } from "../bridge-timeout";
 import { executeInVmContext, type JsDisplayOutput } from "./context-manager";
 import type { JsStatusEvent } from "./shared/types";

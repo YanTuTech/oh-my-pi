@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionData } from "../src/export/html";
+import type { SessionData } from "../src/export/session-data";
 import {
 	buildShareSnapshot,
 	normalizeShareServerUrl,

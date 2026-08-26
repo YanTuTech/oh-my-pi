@@ -43,8 +43,7 @@ import {
 	type SetSessionModeResponse,
 	type Usage,
 } from "@oh-my-pi/pi-utils/acp";
-import { disableProvider, enableProvider, reset as resetCapabilities } from "../../capability";
-import { Settings } from "../../config/settings";
+import { reset as resetCapabilities } from "../../capability";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../../discovery/helpers";
 import {
 	type ExtensionUIContext,
@@ -55,11 +54,10 @@ import { runExtensionCompact } from "../../extensibility/extensions/compact-hand
 import { getSessionSlashCommands } from "../../extensibility/extensions/get-commands-handler";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../../extensibility/skills";
 import { loadSlashCommands } from "../../extensibility/slash-commands";
+import { runtimeTheme } from "../../extensibility/ui-contract";
 import { resolveLocalUrlToPath } from "../../internal-urls";
 import { MCPManager } from "../../mcp/manager";
 import type { MCPServerConfig } from "../../mcp/types";
-import { loadAllExtensions } from "../../modes/components/extensions/state-manager";
-import { theme } from "../../modes/theme/theme";
 import { normalizePlanTitle, type PlanApprovalDetails, resolveApprovedPlan } from "../../plan-mode/approved-plan";
 import type { AgentSession, AgentSessionEvent } from "../../session/agent-session";
 import { BlobStore, resolveImageDataSync } from "../../session/blob-store";
@@ -596,7 +594,7 @@ export function createAcpExtensionUiContext(
 		addAutocompleteProvider: () => {},
 		setEditorComponent: () => {},
 		get theme() {
-			return theme;
+			return runtimeTheme;
 		},
 		getAllThemes: async () => [],
 		getTheme: async () => undefined,
@@ -642,7 +640,7 @@ export class AcpAgent implements Agent {
 				type: "terminal",
 				id: "terminal",
 				name: "Set up Oh My Pi in terminal",
-				description: "Launch the omp TUI to add provider keys and select models.",
+				description: "Launch the configured interactive terminal host to add provider keys and select models.",
 				args: [ACP_TERMINAL_AUTH_FLAG],
 			});
 		}
@@ -1164,23 +1162,6 @@ export class AcpAgent implements Agent {
 				}
 				const reports = await target.fetchUsageReports();
 				return { reports: reports ?? [] };
-			}
-			case "_omp/extensions": {
-				const cwd = typeof params.cwd === "string" ? (params.cwd as string) : undefined;
-				const sm = await Settings.init();
-				const disabledIds = (sm.get("disabledExtensions") as string[] | undefined) ?? [];
-				const extensions = await loadAllExtensions(cwd, disabledIds);
-				return { extensions: extensions as unknown as Array<{ [key: string]: unknown }> };
-			}
-			case "_omp/extensions/toggle": {
-				const providerId = params.providerId;
-				if (typeof providerId !== "string") throw new Error("providerId required");
-				if (params.enabled === false) {
-					disableProvider(providerId);
-					return { enabled: false };
-				}
-				enableProvider(providerId);
-				return { enabled: true };
 			}
 			default:
 				throw new Error(`Unknown ACP ext method: ${method}`);
@@ -1840,8 +1821,8 @@ export class AcpAgent implements Agent {
 				workflow: previous?.workflow ?? "parallel",
 				reentry: previous !== undefined,
 			});
-			// Mirror `InteractiveMode.#enterPlanMode`: register the plan-proposal
-			// handler that consumes `xd://propose` writes from plan mode. Without
+			// Register the plan-proposal handler that consumes `xd://propose`
+			// writes from plan mode. Without
 			// this, proposal dispatch falls through and plan mode has no approval
 			// path (issue #1869).
 			session.setPlanProposalHandler?.(title => this.#handleAcpPlanProposal(session, title));
@@ -1859,8 +1840,7 @@ export class AcpAgent implements Agent {
 	 * when supported), and on approval keeps the chosen plan path, exits plan
 	 * mode, and notifies the client so the agent regains full tools.
 	 *
-	 * Mirrors `InteractiveMode.#handlePlanProposal` for the parts the agent sees
-	 * (same `PlanApprovalDetails` shape). Clients without form-mode elicitation
+	 * Uses the shared `PlanApprovalDetails` shape. Clients without form-mode elicitation
 	 * get an auto-approve so plan mode is never stranded — the agent always has
 	 * a way out.
 	 */

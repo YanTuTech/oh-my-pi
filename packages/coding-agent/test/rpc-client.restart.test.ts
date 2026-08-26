@@ -17,7 +17,7 @@ function isProcessAlive(pid: number): boolean {
 describe("RpcClient lifecycle (issue #4079 B)", () => {
 	test("auto-negotiates protocol v2 and reassembles an oversized response", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: { MOCK_RPC_V2: "1" },
 		});
 
@@ -32,7 +32,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("normalizes omitted state fields and a runtime-invalid tokensPerSecond", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: { MOCK_RPC_LEGACY_STATE: "1", MOCK_RPC_INVALID_TPS: "1" },
 		});
 
@@ -45,7 +45,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("preserves getMessages snapshot behavior while a v2 page walk is unavailable", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: { MOCK_RPC_V2: "1", MOCK_RPC_PAGE_BUSY: "1" },
 		});
 
@@ -58,7 +58,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("discards partial pages and falls back to get_messages when a cursor goes stale mid-walk", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: { MOCK_RPC_V2: "1", MOCK_RPC_PAGE_STALE: "1" },
 		});
 
@@ -77,7 +77,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("start() succeeds a second time after stop() on the same instance", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 		});
 
 		// First lifecycle: start + stop.
@@ -96,7 +96,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 		using tempDir = TempDir.createSync("@omp-rpc-stop-restart-");
 		const pidFile = tempDir.join("pid");
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: {
 				MOCK_RPC_PID_FILE: pidFile,
 				MOCK_RPC_IGNORE_SIGTERM: process.platform === "win32" ? "0" : "1",
@@ -123,7 +123,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 			MOCK_RPC_EXIT_STDERR: "fixture startup failed",
 		};
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env,
 			terminationGraceMs: 10,
 		});
@@ -140,7 +140,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("stop() rejects active requests instead of leaving them to time out", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: { MOCK_RPC_IGNORE_COMMANDS: "1" },
 		});
 		await client.start();
@@ -157,7 +157,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 		using tempDir = TempDir.createSync("@omp-rpc-reader-failure-");
 		const pidFile = tempDir.join("pid");
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: {
 				MOCK_RPC_PID_FILE: pidFile,
 				MOCK_RPC_INVALID_OUTPUT: "1",
@@ -181,7 +181,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 	test("reports exit code and stderr when a ready worker exits", async () => {
 		using client = new RpcClient({
-			cliPath: MOCK_AGENT,
+			rpcHostPath: MOCK_AGENT,
 			env: {
 				MOCK_RPC_EXIT_ON_COMMAND: "23",
 				MOCK_RPC_EXIT_STDERR: "fixture worker failed",

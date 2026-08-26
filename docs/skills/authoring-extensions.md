@@ -82,7 +82,7 @@ omp loads extension modules from these sources:
    - `~/.omp/agent/extensions/`
    - legacy extension paths listed in `.omp/settings.json#extensions` or `~/.omp/agent/settings.json#extensions`
 2. Enabled installed plugins under `~/.omp/plugins/node_modules` or a project plugin root — including npm, marketplace, and `omp plugin link` installs — via their `omp.extensions`/`pi.extensions` manifests.
-3. Explicit configured paths passed by the CLI (`omp --extension ./my-ext.ts`, also `-e`; `--hook` is treated as an alias) and by the `extensions:` setting in config.
+3. Explicit host paths passed as `CreateAgentSessionOptions.additionalExtensionPaths` and paths from the `extensions:` setting.
 
 The runtime de-duplicates by resolved absolute path — first seen wins.
 
@@ -171,7 +171,7 @@ const z = pi.zod;
 
 pi.registerTool({
   name: "search_notes",           // snake_case, unique
-  label: "Search Notes",          // human-readable label for TUI
+  label: "Search Notes",          // human-readable host metadata
   description: "Full-text search through project notes",
   parameters: z.object({
     query: z.string().describe("Search query"),
@@ -225,14 +225,14 @@ Full event catalog: see [extension authoring guide](../extensions.md).
 | Tools + commands + events in one module | **Extension** (`ExtensionAPI`) |
 | Pure event interception (policy, redaction) | **Extension** or **Hook** (both work; extension is preferred) |
 | Legacy hook module already exists | **Hook** (`HookAPI` from `@oh-my-pi/pi-coding-agent/extensibility/hooks`) |
-| Registering a provider, shortcut, or CLI flag | **Extension only** |
+| Registering a provider or host interaction | **Extension only** |
 | Shipping as a marketplace plugin | **Extension** (use `package.json` manifest) |
 
 Extensions are a strict superset of hooks. New authoring should use `ExtensionAPI`.
 
 ## Debugging
 
-omp writes structured logs under the active state root's `logs/` directory (by default `~/.omp/logs/`; debug level is always on, and nothing is written to the console because that would corrupt the TUI). Each filename includes the process ID. Tail today's default-profile logs to see extension load diagnostics:
+The Runtime writes structured logs under the active state root's `logs/` directory (by default `~/.omp/logs/`). Extensions must not write diagnostics to stdout because that can corrupt RPC/ACP protocols. Each filename includes the process ID. Tail today's default-profile logs to see extension load diagnostics:
 
 ```
 tail -f ~/.omp/logs/omp.$(date +%F).*.log

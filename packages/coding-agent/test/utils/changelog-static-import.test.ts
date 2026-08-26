@@ -54,7 +54,7 @@ function changelogUtilsStubPlugin(): BunPlugin {
 }
 
 describe("bundled changelog asset path resolution", () => {
-	const moduleUrl = new URL("file:///opt/omp/dist/cli.js");
+	const moduleUrl = new URL("file:///opt/omp/dist/runtime/index.js");
 
 	test.each([
 		["Windows drive-letter", String.raw`C:\omp\dist\CHANGELOG.md`],

@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import { importRoomKey } from "@oh-my-pi/pi-coding-agent/collab/crypto";
-import { CollabHost } from "@oh-my-pi/pi-coding-agent/collab/host";
+import { CollabHost, type CollabHostContext } from "@oh-my-pi/pi-coding-agent/collab/host";
 import {
 	COLLAB_PROTO,
 	type CollabFrame,
@@ -15,7 +15,6 @@ import {
 	unpackEnvelope,
 } from "@oh-my-pi/pi-coding-agent/collab/protocol";
 import { CollabSocket } from "@oh-my-pi/pi-coding-agent/collab/relay-client";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 
 interface RelayData {
 	role: "host" | "guest";
@@ -80,7 +79,7 @@ interface CapturedPrompt {
 }
 
 interface StreamingHostHarness {
-	ctx: InteractiveModeContext;
+	ctx: CollabHostContext;
 	prompts: CapturedPrompt[];
 	nextPrompt(): Promise<CapturedPrompt>;
 }
@@ -109,6 +108,7 @@ function makeStreamingHostContext(): StreamingHostHarness {
 			sessionName: "test",
 			model: undefined,
 			thinkingLevel: undefined,
+			getContextUsage: () => ({ usedTokens: 0, contextWindow: 0, percent: 0 }),
 			subscribe: () => () => {},
 			emitNotice: () => {},
 			promptCustomMessage: (message: CapturedPrompt, options?: CapturedPrompt["options"]) => {
@@ -119,16 +119,8 @@ function makeStreamingHostContext(): StreamingHostHarness {
 			},
 		},
 		eventBus: undefined,
-		statusLine: {
-			setCollabStatus: () => {},
-			invalidate: () => {},
-			getCachedContextBreakdown: () => ({ usedTokens: 0, contextWindow: 0 }),
-		},
-		ui: { requestRender: () => {} },
-		updatePendingMessagesDisplay: () => {},
-		showStatus: () => {},
-		collabHost: undefined,
-	} as unknown as InteractiveModeContext;
+		onPendingMessagesChanged: () => {},
+	} as unknown as CollabHostContext;
 	const nextPrompt = (): Promise<CapturedPrompt> => {
 		const { promise, resolve } = Promise.withResolvers<CapturedPrompt>();
 		promptWaiters.push(resolve);

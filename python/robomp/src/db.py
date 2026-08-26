@@ -382,7 +382,7 @@ class Database:
     ) -> bool:
         """Insert a webhook event. Returns False if duplicate (by delivery id).
 
-        `last_error` is the reason text surfaced on the dashboard for non-queued
+        `last_error` is the reason text surfaced by the status API for non-queued
         states (skipped, failed). Ignored when state == 'queued'.
         """
         now = _utcnow()
@@ -460,7 +460,7 @@ class Database:
     def set_event_model(self, delivery_id: str, model: str) -> None:
         """Persist the model the worker actually picked for this event.
 
-        Called once per run, right after `pick_model()`, so the dashboard and
+        Called once per run, right after `pick_model()`, so status consumers and
         post-mortems can attribute behavior to the exact model used.
         """
         with self._lock:
@@ -554,7 +554,7 @@ class Database:
 
         By default this ignores `skipped` rows. Those are usually webhook noise
         (`issues.labeled ignored`, bot/self comments) and must not hide the last
-        real processing run when the dashboard retries a failed issue.
+        real processing run when an API caller retries a failed issue.
         """
         state_filter = "" if include_skipped else "AND state <> 'skipped'"
         with self._lock:
@@ -619,7 +619,7 @@ class Database:
     def latest_issue_event_state_counts(self) -> dict[str, int]:
         """Count each issue by its newest non-skipped event state.
 
-        This is the dashboard's "current issue event" view: a later successful
+        This is the status API's "current issue event" view: a later successful
         run clears an older failure for that issue, and ignored webhook noise
         does not make a failed issue look skipped.
         """
@@ -652,7 +652,7 @@ class Database:
         - `last_tool` / `last_tool_ts`: the most recent host-tool call audited
           on the same `issue_key` since `started_at`. Scoping by start time
           prevents stale entries from a prior run on the same issue leaking
-          into the dashboard before this run has emitted any tool calls.
+          into status output before this run has emitted any tool calls.
         """
         with self._lock:
             rows = self._conn.execute(
@@ -766,7 +766,7 @@ class Database:
         `claim_next_event` skips the row until the backoff elapses. `attempts`
         is left untouched (it was already incremented at claim) so the retry
         budget keeps counting down; `last_error` retains the failure reason for
-        the dashboard. Only transitions a 'running'/'failed' row; returns
+        status output. Only transitions a 'running'/'failed' row; returns
         whether a row changed.
         """
         with self._lock:

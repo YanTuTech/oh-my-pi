@@ -11,7 +11,7 @@ import * as path from "node:path";
  * auth-gateway (no provider keys ever enter the task containers).
  *
  * It owns the terminal: Harbor's own output is redirected to a log file and this
- * process renders a live dashboard (progress / success% / spend / tokens / ETA)
+ * process renders live benchmark progress (success rate / spend / tokens / ETA)
  * by polling each trial's `result.json`. On completion it writes a markdown report.
  *
  *   metaharness harbor --model anthropic/claude-sonnet-4-6 --tasks 20 --concurrency 4
@@ -53,7 +53,7 @@ export interface Config {
 	include: string[];
 	exclude: string[];
 	thinking: string | null;
-	/** Extra args forwarded verbatim to the in-container omp CLI invocation (repeatable). */
+	/** Extra args forwarded verbatim to the in-container Runtime RPC host (repeatable). */
 	agentArgs: string[];
 
 	agent: string;
@@ -146,7 +146,7 @@ Model / agent:
 
       --tarball <path>           Reuse a prebuilt omp tarball (implies --install local, --no-build)
       --no-build                 Skip packing; reuse newest tarball in bench dir (--install local)
-      --agent-arg <arg>          Extra arg forwarded verbatim to the in-container omp CLI (repeatable)
+      --agent-arg <arg>          Extra arg forwarded verbatim to the in-container Runtime RPC host (repeatable)
       --env <KEY[=VALUE]>        Forward env into omp container (repeatable).
                                  KEY alone forwards host value; host PI_* auto-forwarded.
 
@@ -829,7 +829,7 @@ export function aggregate(trials: Trial[], job: JobInfo | null, fallbackExpected
 	return t;
 }
 
-// ──────────────────────────────────────────────────────────────── dashboard IO
+// ──────────────────────────────────────────────────────────────── progress IO
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -985,7 +985,16 @@ function readPkgVersion(): string {
 }
 
 function buildTarball(benchDir: string): string {
-	process.stdout.write(dim("packing local omp (bun pm pack)…\n"));
+	process.stdout.write(dim("building and packing the local Runtime…\n"));
+	const build = spawnSync("bun", ["run", "build"], {
+		cwd: CODING_AGENT_DIR,
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	if (build.status !== 0) {
+		process.stderr.write((build.stdout ?? "") + (build.stderr ?? ""));
+		throw new Error("Runtime bundle build failed");
+	}
 	const r = spawnSync("bun", ["pm", "pack", "--destination", benchDir], {
 		cwd: CODING_AGENT_DIR,
 		encoding: "utf8",
@@ -1366,7 +1375,7 @@ const FORWARD_ENV_DENYLIST = new Set([
 ]);
 
 /**
- * Env vars injected into the in-container omp run: every host `PI_*` knob (minus
+ * Env vars injected into the in-container Runtime run: every host `PI_*` knob (minus
  * container-hostile dir/profile/session keys) plus explicit `--env` entries,
  * which always win and bypass the denylist.
  */

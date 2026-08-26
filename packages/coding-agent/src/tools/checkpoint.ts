@@ -3,8 +3,8 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import { prompt } from "@oh-my-pi/pi-utils";
 import checkpointDescription from "../prompts/tools/checkpoint.md" with { type: "text" };
 import rewindDescription from "../prompts/tools/rewind.md" with { type: "text" };
-import type { ToolSession } from ".";
 import type { OutputMeta } from "./output-meta";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

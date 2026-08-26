@@ -11,11 +11,10 @@ import type { AuthStorage } from "@oh-my-pi/pi-ai";
 import { prompt } from "@oh-my-pi/pi-utils";
 import { ModelRegistry } from "../../config/model-registry";
 import { settings } from "../../config/settings";
-import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
-import type { Theme } from "../../modes/theme/theme";
+import type { CustomTool, CustomToolContext } from "../../extensibility/custom-tools/types";
 import webSearchDescription from "../../prompts/tools/web-search.md" with { type: "text" };
 import { discoverAuthStorage } from "../../sdk";
-import type { ToolSession } from "../../tools";
+import type { ToolSession } from "../../tools/runtime";
 import {
 	formatSearchProviderFailure,
 	formatSearchProviderFailures,
@@ -23,8 +22,8 @@ import {
 	getSearchProviderLabel,
 	resolveProviderCandidates,
 } from "./provider";
-import { renderSearchCall, renderSearchResult, type SearchRenderDetails } from "./render";
 import { type ExecuteSearchQueryOptions, executeSearchQuery, type ProviderTimeoutPolicy } from "./runtime-core";
+import type { SearchRenderDetails } from "./types";
 import { DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS, MAX_WEB_SEARCH_TIMEOUT_SECONDS, type SearchProviderId } from "./types";
 
 /** Web search tool parameters schema */
@@ -195,14 +194,6 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 			sessionId,
 			signal,
 		});
-	},
-
-	renderCall(args: SearchToolParams, options: RenderResultOptions, theme: Theme) {
-		return renderSearchCall(args, options, theme);
-	},
-
-	renderResult(result, options: RenderResultOptions, theme: Theme, args) {
-		return renderSearchResult(result, options, theme, args);
 	},
 };
 

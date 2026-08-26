@@ -1,3 +1,5 @@
+/// <reference path="../policy/omp-policy-modules.d.ts" />
+
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import { getProjectDir, prompt } from "@oh-my-pi/pi-utils";
@@ -530,11 +532,9 @@ export function parseSkillInvocation(text: string): ParsedSkillInvocation | unde
 }
 
 /**
- * Whether the (already left-trimmed) draft begins with a TUI local-execution
- * sigil that downstream branches will consume verbatim — `!`/`!!` for the bash
- * tool and `$`/`$$` followed by ASCII whitespace for the python tool. Mirrors
- * `pythonCommandPrefixLength` in `modes/controllers/input-controller` so the
- * two checks agree without forcing a circular import.
+ * Whether the (already left-trimmed) draft begins with a local-execution sigil
+ * that downstream branches consume verbatim — `!`/`!!` for the bash tool and
+ * `$`/`$$` followed by ASCII whitespace for the python tool.
  */
 function startsWithLocalExecutionPrefix(trimmedStart: string): boolean {
 	if (trimmedStart.startsWith("!")) return true;

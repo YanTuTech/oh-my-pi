@@ -11,7 +11,6 @@ User setup, permissions, safety guidance, examples, and platform limitations: [S
 - Safety prompt: `packages/coding-agent/src/prompts/system/computer-safety.md`
 - Tool registration/gate: `packages/coding-agent/src/tools/index.ts`
 - Exposure policy: `packages/coding-agent/src/tools/computer/exposure.ts`
-- Renderer: `packages/coding-agent/src/tools/computer-renderer.ts`
 - Persistent worker: `packages/coding-agent/src/tools/computer/{supervisor,protocol,worker,worker-entry}.ts`
 - Native implementation: `crates/pi-natives/src/desktop/`
 - Native public types: `packages/natives/native/index.d.ts`
@@ -116,7 +115,7 @@ If nothing is displayed and there is no return value, the result is `Ran compute
 
 `ComputerToolDetails` contains `code`, `readOnly`, `screenshots`, optional `returnValue`, and capability metadata (`backend`, `capturePermission`, `inputPermission`, `axPermission`). Each screenshot detail contains `path`, `width`, `height`, optional `sourceWidth`/`sourceHeight`, and `target`. Provider delivery uses ordinary text/image tool-result content with image detail `original`; it does not use provider Files or native `computer_call_output` metadata.
 
-The TUI renderer merges call and result, previews the code and textual output, and reports read-only state, screenshot count, and errors. It sanitizes rendered strings.
+RPC/SDK consumers receive the complete text/image content plus structured details; no Runtime UI renderer is bundled.
 
 ## Flow and lifecycle
 

@@ -1,5 +1,5 @@
 {
-  description = "OMP coding agent and development environment";
+  description = "Oh My Pi Agent Runtime development environment";
 
   nixConfig = {
     extra-substituters = [ "https://nix-community.cachix.org" ];
@@ -76,32 +76,8 @@
             })
           ];
         };
-      packageFor =
-        system:
-        let
-          pkgs = pkgsFor system;
-          rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        in
-        pkgs.callPackage ./nix/package.nix {
-          inherit rustToolchain;
-          source = self.outPath;
-        };
     in
     {
-      packages = forAllSystems (system: {
-        default = packageFor system;
-        omp = packageFor system;
-      });
-
-      apps = forAllSystems (system: {
-        default = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/omp";
-          meta.description = "Run OMP";
-        };
-        omp = self.apps.${system}.default;
-      });
-
       devShells = forAllSystems (
         system:
         let
@@ -117,45 +93,6 @@
         system:
         let
           pkgs = pkgsFor system;
-          homeManagerEvaluation = pkgs.lib.evalModules {
-            specialArgs = { inherit pkgs; };
-            modules = [
-              {
-                options.home.packages = pkgs.lib.mkOption {
-                  type = pkgs.lib.types.listOf pkgs.lib.types.package;
-                  default = [ ];
-                };
-                options.home.activation = pkgs.lib.mkOption {
-                  type = pkgs.lib.types.attrsOf pkgs.lib.types.anything;
-                  default = { };
-                };
-              }
-              self.homeManagerModules.default
-              {
-                programs.omp.enable = true;
-                programs.omp.settings.startup.quiet = true;
-              }
-            ];
-          };
-          nixosEvaluation = pkgs.lib.evalModules {
-            specialArgs = { inherit pkgs; };
-            modules = [
-              {
-                options.environment.systemPackages = pkgs.lib.mkOption {
-                  type = pkgs.lib.types.listOf pkgs.lib.types.package;
-                  default = [ ];
-                };
-              }
-              self.nixosModules.default
-              { programs.omp.enable = true; }
-            ];
-          };
-          modulesEvaluate =
-            assert builtins.elem self.packages.${system}.default homeManagerEvaluation.config.home.packages;
-            assert homeManagerEvaluation.config.home.activation ? ompConfig;
-            assert builtins.elem self.packages.${system}.default
-              nixosEvaluation.config.environment.systemPackages;
-            pkgs.runCommand "omp-module-evaluation" { } "touch $out";
         in
         {
           bun-lock = pkgs.runCommand "omp-bun-lock" { nativeBuildInputs = [ pkgs.bun2nix ]; } ''
@@ -167,20 +104,9 @@
             diff -u nix/bun.expected.nix nix/bun.nix
             touch "$out"
           '';
-          modules = modulesEvaluate;
-          omp = self.packages.${system}.default;
         }
       );
 
       formatter = forAllSystems (system: (pkgsFor system).nixfmt);
-
-      overlays.default = _final: previous: {
-        omp = self.packages.${previous.stdenv.hostPlatform.system}.default;
-      };
-
-      homeManagerModules.default = import ./nix/home-manager.nix { inherit self; };
-      homeManagerModules.omp = self.homeManagerModules.default;
-      nixosModules.default = import ./nix/nixos-module.nix { inherit self; };
-      nixosModules.omp = self.nixosModules.default;
     };
 }

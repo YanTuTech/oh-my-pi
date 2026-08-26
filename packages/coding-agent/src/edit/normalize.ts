@@ -6,7 +6,7 @@
  * existing consumers see one stable surface.
  */
 
-import { padding } from "@oh-my-pi/pi-tui";
+import { padding } from "@oh-my-pi/pi-utils/display-text";
 
 export {
 	type BomResult,

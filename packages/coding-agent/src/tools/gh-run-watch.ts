@@ -1,7 +1,6 @@
 import { scheduler } from "node:timers/promises";
 import type { AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import * as git from "../utils/git";
-import type { ToolSession } from ".";
 import type {
 	GhRunWatchFailedLogDetails,
 	GhRunWatchJobDetails,
@@ -35,6 +34,7 @@ import type {
 	GhRunSnapshot,
 	GithubInput,
 } from "./gh-types";
+import type { ToolSession } from "./runtime";
 import { ToolError, throwIfAborted } from "./tool-errors";
 
 export const RUN_WATCH_INTERVAL_DEFAULT = 3;

@@ -9,7 +9,7 @@ import {
 } from "../autolearn/managed-skills";
 import { isNameClaimedByAuthoredSkill } from "../extensibility/skills";
 import manageSkillDescription from "../prompts/tools/manage-skill.md" with { type: "text" };
-import type { ToolSession } from ".";
+import type { ToolSession } from "./runtime";
 
 const manageSkillSchema = type({
 	action: "'create' | 'update' | 'delete'",

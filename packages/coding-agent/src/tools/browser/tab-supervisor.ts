@@ -2,8 +2,8 @@ import { getPuppeteerDir, logger, postmortem, Snowflake, withTimeout, workerHost
 import type { Page, Target } from "puppeteer-core";
 import { callSessionTool } from "../../eval/js/tool-bridge";
 import { webpExclusionForModel } from "../../utils/image-loading";
-import type { ToolSession } from "../index";
 import { expandPath } from "../path-utils";
+import type { ToolSession } from "../runtime";
 import { ToolAbortError, ToolError } from "../tool-errors";
 import { pickElectronTarget, shouldPreserveConnectedBrowserFocus } from "./attach";
 import { CmuxTab, runCmuxCode } from "./cmux/cmux-tab";

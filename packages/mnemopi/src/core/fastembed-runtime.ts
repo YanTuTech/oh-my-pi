@@ -24,7 +24,7 @@ export interface FastembedRuntimeInstallPlan {
 /**
  * `fastembed` is an optional peer (~270MB of native assets across platforms),
  * never bundled and never installed eagerly. When the direct import cannot
- * resolve — bundled `dist/cli.js`, compiled binary, a consumer that skipped the
+ * resolve — a bundled Runtime host, a consumer that skipped the
  * optional peer, or a native loader failure — fastembed is `bun install`ed into
  * a per-version runtime cache on first use and loaded from there (#2389).
  *

@@ -3,7 +3,6 @@ export { truncate } from "@oh-my-pi/pi-utils";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import { isEnoent } from "@oh-my-pi/pi-utils";
-import { type Theme, theme } from "../modes/theme/theme";
 import { formatGroupedFiles } from "../tools/grouped-file-output";
 import { formatPathRelativeToCwd, resolveToCwd } from "../tools/path-utils";
 import type {
@@ -147,20 +146,17 @@ export function sortDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
  * Get icon for diagnostic severity.
  */
 export function severityToIcon(severity?: DiagnosticSeverity): string {
-	const currentTheme = theme as Theme | undefined;
-	const fallback = currentTheme?.format?.bullet ?? "*";
-	const status = currentTheme?.status;
 	switch (severity ?? 1) {
 		case 1:
-			return status?.error ?? fallback;
+			return "✘";
 		case 2:
-			return status?.warning ?? fallback;
+			return "⚠";
 		case 3:
-			return status?.info ?? fallback;
+			return "ⓘ";
 		case 4:
-			return currentTheme?.format?.bullet ?? fallback;
+			return "•";
 		default:
-			return status?.error ?? fallback;
+			return "✘";
 	}
 }
 
@@ -342,7 +338,7 @@ export function formatWorkspaceEdit(edit: WorkspaceEdit, cwd: string): string[] 
 						break;
 					case "rename":
 						results.push(
-							`RENAME: ${formatPathRelativeToCwd(uriToFile(change.oldUri), cwd)} ${theme.nav.cursor} ${formatPathRelativeToCwd(uriToFile(change.newUri), cwd)}`,
+							`RENAME: ${formatPathRelativeToCwd(uriToFile(change.oldUri), cwd)} ❯ ${formatPathRelativeToCwd(uriToFile(change.newUri), cwd)}`,
 						);
 						break;
 					case "delete":
@@ -365,7 +361,7 @@ export function formatTextEdit(edit: TextEdit, maxLength = 50): string {
 		edit.newText.length > maxLength
 			? `${edit.newText.slice(0, maxLength).replace(/\n/g, "\\n")}…`
 			: edit.newText.replace(/\n/g, "\\n");
-	return `line ${range} ${theme.nav.cursor} "${preview}"`;
+	return `line ${range} ❯ "${preview}"`;
 }
 
 // =============================================================================
@@ -373,16 +369,12 @@ export function formatTextEdit(edit: TextEdit, maxLength = 50): string {
 // =============================================================================
 
 function getSymbolKindIcons(): Record<SymbolKind, string> {
-	const currentTheme = theme as Theme | undefined;
-	const fallback = currentTheme?.format?.bullet ?? "*";
-	const dash = currentTheme?.format?.dash ?? fallback;
-	const icon = currentTheme?.icon;
-
-	const file = icon?.file ?? fallback;
-	const folder = icon?.folder ?? fallback;
-	const pkg = icon?.package ?? folder;
-	const model = icon?.model ?? fallback;
-	const func = icon?.auto ?? dash;
+	const fallback = "•";
+	const file = "📄";
+	const folder = "📁";
+	const pkg = "📦";
+	const model = "⬢";
+	const func = "⟲";
 
 	return {
 		1: file, // File
@@ -418,9 +410,7 @@ function getSymbolKindIcons(): Record<SymbolKind, string> {
  * Get icon for symbol kind.
  */
 export function symbolKindToIcon(kind: SymbolKind): string {
-	const currentTheme = theme as Theme | undefined;
-	const bullet = currentTheme?.format?.bullet ?? "*";
-	return getSymbolKindIcons()[kind] ?? bullet;
+	return getSymbolKindIcons()[kind] ?? "•";
 }
 
 /**

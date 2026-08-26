@@ -1,9 +1,8 @@
 import { getProjectDir } from "@oh-my-pi/pi-utils";
-import { pickCleanseTarget, promptCleanseRequest } from "../cli/cleanse-picker";
 import { shortenPath } from "../tools/render-utils";
 import { type CleanseAgentHooks, type CleanseAgentRuntime, createCleanseAgentRuntime } from "./agent";
 import { groupDiagnosticsByFile } from "./balance";
-import { type CleanseStatusBoard, createCleanseStatusBoard } from "./board";
+import type { CleanseStatusBoard } from "./board";
 import {
 	buildCustomCleanseSuite,
 	type CleanseCheckerDescriptor,
@@ -224,28 +223,6 @@ export async function runCleanse(
 	} finally {
 		board.close();
 		await runtime?.close(loopResult);
-	}
-}
-
-/** CLI adapter for {@link runCleanse}: stdout board, one-shot pickers, SIGINT/SIGTERM cancellation. */
-export async function runCleanseCommand(options: CleanseCommandOptions = {}): Promise<CleanseCommandResult> {
-	const abortController = new AbortController();
-	const abort = (): void => abortController.abort(new Error("Cleanse interrupted"));
-	process.once("SIGINT", abort);
-	process.once("SIGTERM", abort);
-	const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
-	const ui: CleanseRunUi = {
-		board: createCleanseStatusBoard(),
-		print: text => process.stdout.write(`${text}\n`),
-		printError: text => process.stderr.write(`${text}\n`),
-		pickTarget: interactive ? pickCleanseTarget : undefined,
-		promptRequest: interactive ? promptCleanseRequest : undefined,
-	};
-	try {
-		return await runCleanse(options, ui, abortController.signal);
-	} finally {
-		process.off("SIGINT", abort);
-		process.off("SIGTERM", abort);
 	}
 }
 

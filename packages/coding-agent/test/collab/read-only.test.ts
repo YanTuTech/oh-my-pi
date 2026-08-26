@@ -10,10 +10,9 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { importRoomKey } from "@oh-my-pi/pi-coding-agent/collab/crypto";
-import { CollabHost } from "@oh-my-pi/pi-coding-agent/collab/host";
+import { CollabHost, type CollabHostContext } from "@oh-my-pi/pi-coding-agent/collab/host";
 import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@oh-my-pi/pi-coding-agent/collab/protocol";
 import { CollabSocket } from "@oh-my-pi/pi-coding-agent/collab/relay-client";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 import { AgentRegistry } from "@oh-my-pi/pi-coding-agent/registry/agent-registry";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { installInMemoryRelay, uninstallInMemoryRelay } from "./helpers/in-memory-relay";
@@ -25,7 +24,7 @@ import { installInMemoryRelay, uninstallInMemoryRelay } from "./helpers/in-memor
 // are all exercised.
 
 interface HostHarness {
-	ctx: InteractiveModeContext;
+	ctx: CollabHostContext;
 	prompts: { from?: string }[];
 	aborts: { count: number };
 	/** Resolves on the next promptCustomMessage call — no polling. */
@@ -54,6 +53,7 @@ function makeHostContext(): HostHarness {
 			sessionName: "test",
 			model: undefined,
 			thinkingLevel: undefined,
+			getContextUsage: () => ({ usedTokens: 0, contextWindow: 0, percent: 0 }),
 			subscribe: () => () => {},
 			emitNotice: () => {},
 			promptCustomMessage: (message: { details?: { from?: string } }) => {
@@ -68,15 +68,7 @@ function makeHostContext(): HostHarness {
 			},
 		},
 		eventBus: undefined,
-		statusLine: {
-			setCollabStatus: () => {},
-			invalidate: () => {},
-			getCachedContextBreakdown: () => ({ usedTokens: 0, contextWindow: 0 }),
-		},
-		ui: { requestRender: () => {} },
-		showStatus: () => {},
-		collabHost: undefined,
-	} as unknown as InteractiveModeContext;
+	} as unknown as CollabHostContext;
 	const nextPrompt = (): Promise<{ from?: string }> => {
 		const { promise, resolve } = Promise.withResolvers<{ from?: string }>();
 		promptWaiters.push(resolve);

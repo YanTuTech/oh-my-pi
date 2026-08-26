@@ -4,7 +4,7 @@ import {
 	ACP_BUILTIN_SLASH_COMMANDS,
 	executeAcpBuiltinSlashCommand,
 } from "@oh-my-pi/pi-coding-agent/slash-commands/acp-builtins";
-import type { SlashCommandRuntime } from "@oh-my-pi/pi-coding-agent/slash-commands/types";
+import type { SlashCommandRuntime } from "@oh-my-pi/pi-coding-agent/slash-commands/runtime-types";
 
 function acpRuntime({
 	isStreaming = false,

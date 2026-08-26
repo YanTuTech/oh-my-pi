@@ -1,0 +1,91 @@
+/** Fixed CSS variables bundled into standalone exports and the share viewer. */
+export type WebExportScheme = "dark" | "light";
+
+const COMMON_VIEWER_VARS = {
+	"--font-mono": 'ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace',
+	"--body-bg": "var(--bg)",
+	"--container-bg": "var(--bg-raised)",
+	"--info-bg": "var(--bg-inset)",
+	"--text": "var(--fg)",
+	"--muted": "var(--fg-muted)",
+	"--dim": "var(--fg-faint)",
+	"--thinkingText": "var(--fg-muted)",
+	"--borderAccent": "#945ff9",
+	"--selectedBg": "var(--accent-muted)",
+	"--success": "var(--ok)",
+	"--error": "var(--err)",
+	"--warning": "var(--warn)",
+	"--userMessageText": "var(--fg)",
+	"--customMessageBg": "var(--bg-overlay)",
+	"--customMessageText": "var(--fg-muted)",
+	"--customMessageLabel": "#945ff9",
+	"--toolOutput": "var(--fg-muted)",
+	"--mdHeading": "var(--accent)",
+	"--mdLink": "var(--link)",
+	"--mdCode": "var(--fg)",
+	"--mdQuote": "var(--fg-muted)",
+	"--mdQuoteBorder": "var(--border-strong)",
+	"--mdListBullet": "var(--accent)",
+	"--syntaxOperator": "var(--fg)",
+	"--syntaxPunctuation": "var(--fg-muted)",
+} as const satisfies Record<string, string>;
+
+export const WEB_EXPORT_THEME_VARS = {
+	dark: {
+		"--bg": "#0f0b14",
+		"--bg-raised": "#16111c",
+		"--bg-inset": "#09060c",
+		"--bg-overlay": "#211b28",
+		"--fg": "#e6e3ea",
+		"--fg-muted": "#a49faa",
+		"--fg-faint": "#6e6974",
+		"--accent": "#ed4abf",
+		"--accent-muted": "oklch(0.674 0.23 341 / 18%)",
+		"--ok": "#68ca80",
+		"--err": "#f05653",
+		"--warn": "#e4b33f",
+		"--border": "oklch(1 0 0 / 9%)",
+		"--border-strong": "oklch(1 0 0 / 13%)",
+		"--ring": "oklch(0.817 0.112 205 / 70%)",
+		"--link": "#5ad8e5",
+		"--syntaxComment": "#6e6974",
+		"--syntaxKeyword": "#945ff9",
+		"--syntaxFunction": "#e4b33f",
+		"--syntaxVariable": "#5ad8e5",
+		"--syntaxString": "#68ca80",
+		"--syntaxNumber": "#ed4abf",
+		"--syntaxType": "#b281d6",
+	},
+	light: {
+		"--bg": "oklch(0.985 0.004 307)",
+		"--bg-raised": "oklch(1 0 0)",
+		"--bg-inset": "oklch(0.95 0.006 307)",
+		"--bg-overlay": "oklch(0.965 0.006 307)",
+		"--fg": "oklch(0.26 0.03 307)",
+		"--fg-muted": "oklch(0.46 0.03 307)",
+		"--fg-faint": "oklch(0.58 0.025 307)",
+		"--accent": "oklch(0.62 0.23 341)",
+		"--accent-muted": "oklch(0.62 0.23 341 / 14%)",
+		"--ok": "oklch(0.55 0.13 150)",
+		"--err": "oklch(0.55 0.19 25)",
+		"--warn": "oklch(0.6 0.13 85)",
+		"--border": "oklch(0 0 0 / 10%)",
+		"--border-strong": "oklch(0 0 0 / 15%)",
+		"--ring": "oklch(0.58 0.13 230 / 70%)",
+		"--link": "#0f7a88",
+		"--syntaxComment": "#77717c",
+		"--syntaxKeyword": "#6d35c7",
+		"--syntaxFunction": "#8a6000",
+		"--syntaxVariable": "#087f8c",
+		"--syntaxString": "#247a3d",
+		"--syntaxNumber": "#b51f88",
+		"--syntaxType": "#7b3fa2",
+	},
+} as const satisfies Record<WebExportScheme, Record<string, string>>;
+
+/** Serialize one web color scheme as CSS custom-property declarations. */
+export function webExportThemeVars(scheme: WebExportScheme): string {
+	return Object.entries({ ...COMMON_VIEWER_VARS, ...WEB_EXPORT_THEME_VARS[scheme] })
+		.map(([key, value]) => `${key}: ${value};`)
+		.join(" ");
+}

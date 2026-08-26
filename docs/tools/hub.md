@@ -2,10 +2,10 @@
 
 > The single agent-coordination surface: peer messaging over the process-global mailbox bus, background-job control, and supervision of shared long-running processes.
 
-Merged from the former `irc`, `job`, and `launch` tools; each op family keeps its old behavior and rendering.
+Merged from the former `irc`, `job`, and `launch` tools; each op family keeps its Runtime behavior and structured details.
 
 ## Source
-- Entry: `packages/coding-agent/src/tools/hub/index.ts` (schema, `HubTool`, unified `wait`, renderer dispatch)
+- Entry: `packages/coding-agent/src/tools/hub/index.ts` (schema, `HubTool`, unified `wait` dispatch)
 - Messaging half: `packages/coding-agent/src/tools/hub/messaging.ts`
 - Jobs half: `packages/coding-agent/src/tools/hub/jobs.ts`
 - Launch half: `packages/coding-agent/src/tools/hub/launch.ts`
@@ -123,4 +123,4 @@ Unchanged from the former `launch` tool: the first process op starts a detached 
 - The IRC bus, agent registry, job manager, and launch broker are unchanged subsystems; only the tool surface merged.
 - A running recipient still gets messages injected as non-interrupting asides (`irc:incoming` custom messages, `prompts/system/irc-incoming.md`); replies are real turns.
 - Messaging a parked agent revives it — the only resume primitive; the task tool has no `resume` parameter.
-- TUI rendering is preserved per family: messaging cards (`IRC ➤ / ⟵` headers), job waiting frames (displaceable, shimmering rows), and launch frames render byte-identically to the pre-merge tools; the `hub` renderer only dispatches.
+- Structured details remain distinct per family so RPC/ACP/SDK hosts can project messaging, job-wait, and launch state without parsing the text result.

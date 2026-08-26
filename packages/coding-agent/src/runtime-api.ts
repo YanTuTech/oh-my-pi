@@ -1,0 +1,37 @@
+/** Embeddable Agent Runtime surface shared by the package root and extension loaders. */
+
+export * as zod from "@oh-my-pi/omptype/zod";
+export { z } from "@oh-my-pi/omptype/zod";
+export { getAgentDir, logger, VERSION } from "@oh-my-pi/pi-utils";
+export * from "./config/model-registry";
+export * from "./config/prompt-templates";
+export type { RetrySettings, SkillsSettings } from "./config/settings";
+export { Settings, settings } from "./config/settings";
+export type * from "./extensibility/custom-commands/types";
+export * from "./extensibility/custom-tools";
+export * from "./extensibility/extensions";
+export * from "./extensibility/skills";
+export { type FileSlashCommand, loadSlashCommands as discoverSlashCommands } from "./extensibility/slash-commands";
+export type * from "./lsp";
+export * from "./mcp/broker-oauth-refresh";
+export * from "./sdk";
+export * from "./session/agent-session";
+export * from "./session/auth-storage";
+export * from "./session/indexed-session-storage";
+export * from "./session/messages";
+export * from "./session/redis-session-storage";
+export * from "./session/runtime-gc";
+export * from "./session/session-context";
+export * from "./session/session-dump-format";
+export * from "./session/session-entries";
+export * from "./session/session-listing";
+export * from "./session/session-loader";
+export * from "./session/session-manager";
+export * from "./session/session-migrations";
+export * from "./session/session-ranking";
+export * from "./session/session-storage";
+export * from "./session/sql-session-storage";
+export * from "./task/executor";
+export type * from "./task/types";
+export * from "./tools";
+export * from "./utils/git";

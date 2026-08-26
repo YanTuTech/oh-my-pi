@@ -1,4 +1,4 @@
-import type { DeferredDiagnosticsEntry, ToolSession } from "../tools";
+import type { DeferredDiagnosticsEntry, ToolSession } from "../tools/runtime";
 import { getDiagnosticsLedger } from "./diagnostics-ledger";
 import type { FileDiagnosticsResult, WritethroughDeferredHandle } from "./index";
 

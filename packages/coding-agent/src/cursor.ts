@@ -403,14 +403,13 @@ function formatTodoSyncSummary(phases: TodoPhase[]): string {
  * Persisted result for a server-resolved todo call.
  *
  * `details` is only attached for an authoritative snapshot, and then
- * `details.phases` is load-bearing rather than decoration: `todoToolRenderer`
- * rebuilds the rendered list exclusively from it, so a mirrored update that
- * omitted it would replay as `Todo 0 tasks` after a reload.
+ * `details.phases` is load-bearing rather than decoration: runtime consumers
+ * rebuild the todo list exclusively from it, so a mirrored update that omitted
+ * it would replay as an empty todo list after a reload.
  *
  * A refusal or a server error carries no `details`. Echoing the current phases
  * there would replay a call that changed nothing as if it had re-asserted the
- * whole list — and `event-controller` feeds `details.phases` straight into
- * `setTodos`, so a refused `read_todos` would overwrite live UI state.
+ * whole list, so a refused `read_todos` could overwrite authoritative state.
  */
 function buildTodoSyncResult(
 	toolCallId: string,

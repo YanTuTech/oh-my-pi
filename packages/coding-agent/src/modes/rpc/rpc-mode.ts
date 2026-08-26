@@ -25,7 +25,7 @@ import {
 } from "../../extensibility/extensions";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../../extensibility/skills";
 import { loadSlashCommands } from "../../extensibility/slash-commands";
-import { type Theme, theme } from "../../modes/theme/theme";
+import { runtimeTheme, type Theme } from "../../extensibility/ui-contract";
 import type { AgentSession } from "../../session/agent-session";
 import type { AgentSessionEvent } from "../../session/agent-session-events";
 import { SKILL_PROMPT_MESSAGE_TYPE, USER_INTERRUPT_LABEL } from "../../session/messages";
@@ -767,7 +767,6 @@ export async function runRpcMode(
 	// process.stdout with no newline, which the reader merges with the next JSON line and
 	// breaks JSON.parse. In RPC mode stdout is the JSON protocol channel — nothing else
 	// may write there.
-	process.env.PI_NOTIFICATIONS = "off";
 
 	const frameEncoder = new RpcFrameEncoder();
 	// Ordered stdout writer honoring backpressure: chunked v2 frames are produced
@@ -980,7 +979,7 @@ export async function runRpcMode(
 		}
 
 		get theme(): Theme {
-			return theme;
+			return runtimeTheme;
 		}
 
 		getAllThemes(): Promise<{ name: string; path: string | undefined }[]> {
@@ -1518,7 +1517,7 @@ export async function runRpcMode(
 								return Promise.reject(
 									new Error(
 										`Provider '${command.providerId}' requires interactive prompts ` +
-											"which are not supported in RPC mode. Use the terminal UI to log in.",
+											"which are not supported by this RPC client. Provision the credential through an interactive host.",
 									),
 								);
 							}

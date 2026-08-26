@@ -3,7 +3,7 @@ import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { logger, untilAborted } from "@oh-my-pi/pi-utils";
 import { ensureBankExists } from "../hindsight/bank";
 import reflectDescription from "../prompts/tools/reflect.md" with { type: "text" };
-import type { ToolSession } from ".";
+import type { ToolSession } from "./runtime";
 
 const memoryReflectSchema = type({
 	query: type("string").describe("question to answer"),

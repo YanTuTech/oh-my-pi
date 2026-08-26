@@ -157,7 +157,7 @@ describe("stats subscription cost correction", () => {
 	it("marks subscription-only SuperGrok usage as unpriced", async () => {
 		await initDb();
 		const stats = createXaiOAuthStats("xai-unpriced");
-		stats.model = "grok-composer-2.5-fast";
+		stats.model = "grok-subscription-only-unpriced";
 
 		insertMessageStats([stats]);
 

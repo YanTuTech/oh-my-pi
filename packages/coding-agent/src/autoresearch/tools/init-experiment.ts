@@ -1,9 +1,6 @@
 import * as path from "node:path";
 import { type } from "@oh-my-pi/omptype";
-import { Text } from "@oh-my-pi/pi-tui";
 import type { ToolDefinition } from "../../extensibility/extensions";
-import type { Theme } from "../../modes/theme/theme";
-import { replaceTabs, truncateToWidth } from "../../tools/render-utils";
 import * as git from "../../utils/git";
 import { parseWorkDirDirtyPaths } from "../git";
 import { dedupeStrings, normalizePathSpec } from "../helpers";
@@ -225,18 +222,7 @@ export function createInitExperimentTool(
 				},
 			};
 		},
-		renderCall(args, _options, theme): Text {
-			return new Text(renderInitCall(args.name, theme), 0, 0);
-		},
-		renderResult(result): Text {
-			const text = replaceTabs(result.content.find(part => part.type === "text")?.text ?? "");
-			return new Text(text, 0, 0);
-		},
 	};
-}
-
-function renderInitCall(name: string, theme: Theme): string {
-	return `${theme.fg("toolTitle", theme.bold("init_experiment"))} ${theme.fg("accent", truncateToWidth(replaceTabs(name), 100))}`;
 }
 
 async function tryReadHeadSha(cwd: string): Promise<string | null> {

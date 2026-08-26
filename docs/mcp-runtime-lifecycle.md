@@ -4,7 +4,7 @@ This document describes how MCP servers are discovered, connected, exposed as to
 
 ## Lifecycle at a glance
 
-1. **SDK startup** kicks off MCP discovery (unless MCP is disabled): headless/SDK sessions await `discoverAndLoadMCPTools()`; interactive sessions (`hasUI: true`) create the manager up front and defer `discoverAndConnect()` until the session is live.
+1. **SDK startup** kicks off MCP discovery (unless MCP is disabled): headless/SDK sessions await `discoverAndLoadMCPTools()`; legacy interactive-host sessions (`hasUI: true`) create the manager up front and defer `discoverAndConnect()` until the session is live.
 2. **Discovery** (`loadAllMCPConfigs`) resolves MCP server configs from capability sources, filters disabled/project/Exa entries and browser MCP servers when the built-in browser tool is enabled, and preserves source metadata.
 3. **Manager connect phase** (`MCPManager.connectServers`) starts per-server connect + `tools/list` in parallel.
 4. **Fast startup gate** waits up to 250ms, then may return:
@@ -23,7 +23,7 @@ This document describes how MCP servers are discovered, connected, exposed as to
 `createAgentSession()` in `src/sdk.ts` performs MCP startup when `enableMCP` is true (default). There are two paths:
 
 - **Headless/SDK** (no UI, no provided manager): awaits `discoverAndLoadMCPTools(cwd, { ... })` and merges the returned tools into the startup `customTools` set.
-- **Interactive/TUI** (`hasUI: true`, no provided manager): constructs `MCPManager` immediately (with cache + auth storage), defers `discoverAndConnect()` to a background task started after the session exists, then binds tools via `session.refreshMCPTools(...)` (disposing the manager if the session was torn down mid-connect).
+- **Interactive host compatibility** (`hasUI: true`, no provided manager): constructs `MCPManager` immediately (with cache + auth storage), defers `discoverAndConnect()` to a background task started after the session exists, then binds tools via `session.refreshMCPTools(...)` (disposing the manager if the session was torn down mid-connect).
 
 Both paths:
 
@@ -143,7 +143,7 @@ Server and tool name components are lowercased and sanitized to letters/undersco
 - `MCPTool` calls tools through an already connected `MCPServerConnection`.
 - `DeferredMCPTool` waits for `waitForConnection(server)` before calling; this allows cached tools to exist before connection is ready.
 - Both attempt a reconnect + single retry for retriable connection failures.
-- A structured tool-result auth challenge can trigger the configured auth handler, reconnect, and one retry. Interactive mode wires this to the `/mcp` OAuth controller; without a handler the challenge remains an MCP error.
+- A structured tool-result auth challenge can trigger the configured host auth handler, reconnect, and one retry. Without a handler the challenge remains an MCP error.
 
 Both return structured tool output and convert remaining transport/tool errors into `MCP error: ...` tool content (abort remains abort).
 
@@ -154,9 +154,9 @@ Both return structured tool output and convert remaining transport/tool errors i
 - one-time discovery/load in `sdk.ts`,
 - tools are registered in initial session tool registry.
 
-### Interactive reload and live-change paths
+### Host-driven reload and live-change paths
 
-`/mcp reload` (`src/modes/controllers/mcp-command-controller.ts`) does:
+A host reload handler does:
 
 1. `mcpManager.disconnectAll()`,
 2. clears stale MCP prompt commands,
@@ -245,5 +245,5 @@ Top-level sessions own managers they create. `AgentSession.dispose()` disconnect
 - [`src/mcp/config.ts`](../packages/coding-agent/src/mcp/config.ts) — config discovery/filtering/validation used by manager.
 - [`src/mcp/tool-bridge.ts`](../packages/coding-agent/src/mcp/tool-bridge.ts) — `MCPTool` and `DeferredMCPTool` runtime behavior.
 - [`src/session/agent-session.ts`](../packages/coding-agent/src/session/agent-session.ts) — `refreshMCPTools` live rebinding.
-- [`src/modes/controllers/mcp-command-controller.ts`](../packages/coding-agent/src/modes/controllers/mcp-command-controller.ts) — interactive reload/reconnect flows.
+- [`src/modes/rpc/rpc-mode.ts`](../packages/coding-agent/src/modes/rpc/rpc-mode.ts) and [`src/modes/acp/acp-agent.ts`](../packages/coding-agent/src/modes/acp/acp-agent.ts) — host-driven reload/reconnect flows.
 - [`src/task/executor.ts`](../packages/coding-agent/src/task/executor.ts) — subagent MCP proxying via parent manager connections.

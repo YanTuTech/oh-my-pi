@@ -160,7 +160,7 @@ Cancellation/timeout:
 - optionally spills full output to an artifact file
 - keeps a UTF-8-safe in-memory tail buffer when output exceeds the configured threshold
 
-`eval` converts this metadata into result truncation notices and TUI warnings.
+`eval` converts this metadata into result truncation notices and structured host details.
 
 Notebook file conversion does **not** use `OutputSink`; it has no stream/artifact truncation pipeline because it does not execute code.
 
@@ -170,9 +170,9 @@ Notebook file conversion does **not** use `OutputSink`; it has no stream/artifac
 
 Notebook files are rendered to the model as text. The visible cell markers are part of the editable representation, not comments that are ignored during serialization.
 
-## Python renderer (for actual execution output)
+## Python execution output contract
 
-Kernel-backed execution rendering expects:
+Kernel-backed execution returns:
 
 - per-cell status transitions (`pending` / `running` / `complete` / `error`)
 - optional structured status events
@@ -180,7 +180,7 @@ Kernel-backed execution rendering expects:
 - image outputs
 - truncation warnings + optional `artifact://<id>` pointer
 
-This renderer behavior is unrelated to notebook JSON editing except that both reuse shared TUI primitives.
+This execution-output contract is independent from notebook JSON editing.
 
 ## 8) Practical workflow
 

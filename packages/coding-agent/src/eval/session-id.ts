@@ -1,4 +1,4 @@
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 
 export type EvalSessionSource = Pick<ToolSession, "cwd" | "getSessionFile">;
 

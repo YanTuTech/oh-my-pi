@@ -17,7 +17,6 @@ import {
 	type WritethroughDeferredHandle,
 } from "../../lsp";
 import { FileChangeType, notifyWorkspaceWatchedFiles } from "../../lsp/client";
-import type { ToolSession } from "../../tools";
 import { routeWriteThroughBridge } from "../../tools/acp-bridge";
 import { assertEditableFile } from "../../tools/auto-generated-guard";
 import {
@@ -31,10 +30,13 @@ import {
 	invalidateFsScanAfterRename,
 	invalidateFsScanAfterWrite,
 } from "../../tools/fs-cache-invalidation";
+import type { LspBatchRequest } from "../../tools/lsp-batch";
 import { resolveToCwd } from "../../tools/path-utils";
 import { enforcePlanModeWrite, resolvePlanPath } from "../../tools/plan-mode-guard";
+import type { ToolSession } from "../../tools/runtime";
 import { ToolError } from "../../tools/tool-errors";
 import type { AppliedEditObserver } from "../blackbox";
+import type { EditToolDetails } from "../details";
 import {
 	ApplyPatchError,
 	type DiffHunk,
@@ -54,7 +56,6 @@ import {
 	stripBom,
 } from "../normalize";
 import { readEditFileText, serializeEditFileText } from "../read-file";
-import type { EditToolDetails, LspBatchRequest } from "../renderer";
 import { createEditResult, type EditPreviewSource, toEditToolResult } from "../result";
 import {
 	type ContextLineResult,

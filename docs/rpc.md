@@ -1,6 +1,6 @@
 # RPC Protocol Reference
 
-RPC mode runs the coding agent as a newline-delimited JSON protocol over stdio.
+The Runtime RPC host runs the coding agent as a newline-delimited JSON protocol over stdio.
 
 - **stdin**: commands (`RpcCommand`), extension UI responses, and host-tool updates/results
 - **stdout**: a ready frame, command responses (`RpcResponse`), session/agent events, extension UI requests, host-tool requests/cancellations
@@ -16,12 +16,12 @@ Primary implementation:
 ## Startup
 
 ```bash
-omp --mode rpc [regular CLI options]
+bun packages/coding-agent/src/runtime-rpc-host.ts --mode rpc [Runtime host options]
 ```
 
 Behavior notes:
 
-- `@file` CLI arguments are rejected in RPC mode.
+- The host accepts only headless Runtime configuration; interactive/file arguments are not part of this entrypoint.
 - RPC mode disables automatic session title generation by default to avoid an extra model call.
 - RPC/ACP host defaults cover task isolation/execution, memory, advisor, tier, async-job, and bash auto-background settings. They are applied only when a path is not explicitly configured; project/global config, `--config`, and isolated settings remain authoritative. Todo settings are not host-defaulted.
 - The process claims stdin before extension discovery, then parses it one non-empty JSONL line at a time. Malformed JSON emits a recoverable `command: "parse"` failure and does not terminate the loop.
@@ -857,7 +857,7 @@ stdin:
 
 Current helper characteristics:
 
-- Spawns `bun <cliPath> --mode rpc`
+- Spawns `bun <rpcHostPath> --mode rpc`
 - Correlates responses by generated `req_<n>` ids
 - Dispatches recognized core `AgentEvent` types to listeners
 - Supports host-owned custom tools via `setCustomTools()` and automatic handling of `host_tool_call` / `host_tool_cancel`
@@ -876,4 +876,4 @@ with RpcClient(provider="anthropic", model="claude-sonnet-4-5") as client:
     print(turn.require_assistant_text())
 ```
 
-By default, `RpcClient` starts `omp --mode rpc`; pass `command=[...]` to own the exact child command. It handles request correlation, typed notifications, v2 negotiation and chunk reassembly, message pagination, extension UI, and host-owned tools and URI schemes. The Python package owns that client API and process lifecycle; this document and `rpc-types.ts` remain the canonical wire contract. Use raw protocol frames when a client library does not wrap the surface you need.
+By default, `RpcClient` starts `omp-runtime-rpc-host --mode rpc`; pass `command=[...]` to own the exact child command. It handles request correlation, typed notifications, v2 negotiation and chunk reassembly, message pagination, extension UI, and host-owned tools and URI schemes. The Python package owns that client API and process lifecycle; this document and `rpc-types.ts` remain the canonical wire contract. Use raw protocol frames when a client library does not wrap the surface you need.

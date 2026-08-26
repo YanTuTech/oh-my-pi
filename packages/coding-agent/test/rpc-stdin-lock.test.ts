@@ -1,31 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import * as path from "node:path";
-import { isRecord, readJsonl } from "@oh-my-pi/pi-utils";
+import { isRecord, readJsonl, TempDir } from "@oh-my-pi/pi-utils";
 
 async function expectRpcOwnsStdin(): Promise<void> {
-	const cliPath = path.join(import.meta.dir, "..", "src", "cli.ts");
+	using agentDir = TempDir.createSync("@omp-rpc-stdin-lock-");
+	const rpcHostPath = path.join(import.meta.dir, "..", "src", "runtime-rpc-host.ts");
 	const extensionPath = path.join(import.meta.dir, "fixtures", "locked-stdin-reader.ts");
-	const child = Bun.spawn(
-		[
-			"bun",
-			cliPath,
-			"--extension",
-			extensionPath,
-			"--mode",
-			"rpc",
-			"--provider",
-			"anthropic",
-			"--model",
-			"claude-sonnet-4-5",
-		],
-		{
-			cwd: path.join(import.meta.dir, ".."),
-			env: { ...Bun.env, PI_NO_TITLE: "1" },
-			stdin: "pipe",
-			stdout: "pipe",
-			stderr: "pipe",
-		},
-	);
+	const child = Bun.spawn(["bun", rpcHostPath, "--extension", extensionPath, "--no-session"], {
+		cwd: path.join(import.meta.dir, ".."),
+		env: { ...Bun.env, PI_CODING_AGENT_DIR: agentDir.path(), PI_NO_TITLE: "1" },
+		stdin: "pipe",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
 	const stderrPromise = new Response(child.stderr).text();
 
 	child.stdin.write(`${JSON.stringify({ type: "get_state", id: "probe" })}\n`);
@@ -55,8 +42,6 @@ async function expectRpcOwnsStdin(): Promise<void> {
 	expect(stateResponse?.success).toBe(true);
 }
 
-// rpc-ui shares this exact pre-discovery claim path (`rpc || rpc-ui`) in main;
-// a second full CLI startup would exercise no distinct ownership behavior.
 describe("RPC mode stdin ownership", () => {
 	test("claims stdin before extensions can lock its singleton stream", () => expectRpcOwnsStdin(), 30000);
 });

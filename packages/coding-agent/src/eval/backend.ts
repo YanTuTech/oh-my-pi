@@ -1,5 +1,5 @@
 import { buildEvalUrlRoots, type LocalProtocolOptions } from "../internal-urls";
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import type { BackendProbeOptions } from "./probe";
 import type { EvalDisplayOutput, EvalLanguage, EvalStatusEvent } from "./types";
 

@@ -13,7 +13,6 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getProjectDir, prompt, sanitizeText } from "@oh-my-pi/pi-utils";
-import { createProgressReporter } from "../cli/progress-reporter";
 import type { AgentSession } from "../session/agent-session";
 import { mapWithConcurrencyLimitAllSettled } from "../task/parallel";
 import { shortenPath } from "../tools/render-utils";
@@ -94,7 +93,12 @@ export async function runCompressCommand(options: CompressCommandOptions): Promi
 	const abort = (): void => abortController.abort(new Error("Compress interrupted"));
 	process.once("SIGINT", abort);
 	process.once("SIGTERM", abort);
-	const progress = createProgressReporter("Compressing");
+	const progress = {
+		interactive: false,
+		start: (_total: number): void => {},
+		complete: (): void => {},
+		finish: (): void => {},
+	};
 	const emitToStdout = targets.length === 1 && !options.inPlace && options.output === undefined;
 
 	try {

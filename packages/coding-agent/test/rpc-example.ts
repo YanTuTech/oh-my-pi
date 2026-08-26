@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import * as readline from "node:readline";
 import { RpcClient } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-client";
 
@@ -9,7 +8,6 @@ import { RpcClient } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-client";
 
 async function main() {
 	const client = new RpcClient({
-		cliPath: path.join(import.meta.dir, "../src/cli.ts"),
 		provider: "anthropic",
 		model: "claude-sonnet-4-20250514",
 		args: ["--no-session"],

@@ -1,28 +1,15 @@
 /**
  * Regression (issue #8096): a configured-but-unreachable auth broker must not
- * crash startup with a raw uncaught `AuthBrokerError` stack trace. Startup auth
- * discovery is wrapped so the failure surfaces as an actionable stderr message
- * and a clean `process.exit(1)`, mirroring the other startup error paths
- * (session resolution, model resolution, export).
+ * surface actionable recovery guidance instead of a raw `AuthBrokerError`.
  *
  * The broker deliberately replaces the local credential store when configured,
  * so an unreachable broker stays fatal — the fix is the recovery guidance, not
  * a silent fallback to local credentials.
  */
-import { describe, expect, it, vi } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { AuthBrokerError } from "@oh-my-pi/pi-ai/auth-broker";
 import { MissingApiKeyError } from "@oh-my-pi/pi-ai/error";
-import { parseArgs } from "@oh-my-pi/pi-coding-agent/cli/args";
-import { runRootCommand } from "@oh-my-pi/pi-coding-agent/main";
 import { describeAuthBrokerStartupError } from "@oh-my-pi/pi-coding-agent/session/auth-broker-config";
-import { setInteractiveHost } from "@oh-my-pi/pi-utils";
-
-class ProcessExitSignal extends Error {
-	constructor(readonly code: number) {
-		super(`process.exit(${code})`);
-		this.name = "ProcessExitSignal";
-	}
-}
 
 describe("describeAuthBrokerStartupError", () => {
 	it("turns a broker connection failure into recovery guidance", async () => {
@@ -62,42 +49,4 @@ describe("describeAuthBrokerStartupError", () => {
 		expect(await describeAuthBrokerStartupError(new Error("boom"))).toBeNull();
 		expect(await describeAuthBrokerStartupError(new TypeError("nope"))).toBeNull();
 	});
-});
-
-describe("runRootCommand — unreachable auth broker at startup", () => {
-	it("exits 1 with an actionable message instead of an uncaught AuthBrokerError", async () => {
-		const previous = setInteractiveHost(false);
-		const parsed = parseArgs([]);
-		parsed.noExtensions = true;
-
-		const exitCodes: number[] = [];
-		let stderr = "";
-		vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-			exitCodes.push(code ?? 0);
-			throw new ProcessExitSignal(code ?? 0);
-		}) as typeof process.exit);
-		vi.spyOn(process.stderr, "write").mockImplementation((chunk: unknown) => {
-			stderr += String(chunk);
-			return true;
-		});
-
-		let thrown: unknown;
-		try {
-			await runRootCommand(parsed, [], {
-				discoverAuthStorage: async () => {
-					throw new AuthBrokerError("Auth broker request failed after 2 attempt(s)");
-				},
-			});
-		} catch (err) {
-			thrown = err;
-		} finally {
-			vi.restoreAllMocks();
-			setInteractiveHost(previous);
-		}
-
-		expect(thrown).toBeInstanceOf(ProcessExitSignal);
-		expect(exitCodes).toEqual([1]);
-		expect(stderr).toContain("Auth broker request failed after 2 attempt(s)");
-		expect(stderr).toContain("omp auth-broker serve");
-	}, 15_000);
 });

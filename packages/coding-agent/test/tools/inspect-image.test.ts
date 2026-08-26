@@ -7,14 +7,11 @@ import { AuthStorage, type completeSimple, Effort, type ImageContent, type Model
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getThemeByName } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import type { ImageAttachmentEntry, ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { InspectImageTool } from "@oh-my-pi/pi-coding-agent/tools/inspect-image";
-import { inspectImageToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/inspect-image-renderer";
-import { toolRenderers } from "@oh-my-pi/pi-coding-agent/tools/renderers";
-import { removeSyncWithRetries, sanitizeText } from "@oh-my-pi/pi-utils";
+import { removeSyncWithRetries } from "@oh-my-pi/pi-utils";
 
 const TINY_PNG_BASE64 =
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
@@ -321,7 +318,7 @@ describe("InspectImageTool", () => {
 		expect(stub.calls).toHaveLength(0);
 	});
 
-	it("wires createAgentSession tool sessions to live image attachments", async () => {
+	it("materializes live image attachments for runtime tools", async () => {
 		const image: ImageContent = { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" };
 		const authStorage = await AuthStorage.create(path.join(testDir, "auth.db"));
 		const modelRegistry = new ModelRegistry(authStorage);
@@ -352,10 +349,7 @@ describe("InspectImageTool", () => {
 					timestamp: Date.now(),
 				});
 
-				const tool = session.getToolByName("inspect_image");
-				expect(tool).toBeDefined();
-				const wiredToolSession = (tool as unknown as { session?: ToolSession }).session;
-				const attachments = wiredToolSession?.getImageAttachments?.();
+				const attachments = session.getImageAttachments();
 				const sourcePath = attachments?.[0]?.sourcePath;
 				if (!sourcePath) {
 					throw new Error("Expected attachment sourcePath to be populated");
@@ -379,44 +373,6 @@ describe("InspectImageTool", () => {
 		const content = userMessage?.content;
 		const contentParts = (Array.isArray(content) ? content : []) as Array<{ type: string; text?: string }>;
 		expect(contentParts[1]).toEqual({ type: "text", text: "What warning is shown?" });
-	});
-
-	it("registers custom renderer and shows question in terminal output", async () => {
-		const theme = await getThemeByName("dark");
-		expect(theme).toBeDefined();
-		const uiTheme = theme!;
-		expect(toolRenderers.inspect_image).toBeDefined();
-
-		const callComponent = inspectImageToolRenderer.renderCall(
-			{ path: "/tmp/screenshot.png", question: "What error text is visible?" },
-			{ expanded: false, isPartial: false },
-			uiTheme,
-		);
-		const callOutput = sanitizeText(callComponent.render(100).join("\n"));
-		expect(callOutput).toContain("Inspect");
-		expect(callOutput).toContain("Question:");
-		expect(callOutput).toContain("What error text is visible?");
-
-		const resultComponent = inspectImageToolRenderer.renderResult(
-			{
-				content: [{ type: "text", text: "line 1\nline 2\nline 3\nline 4\nline 5" }],
-				details: {
-					model: "openai/gpt-4o",
-					imagePath: "/tmp/screenshot.png",
-					mimeType: "image/png",
-				},
-			},
-			{ expanded: false, isPartial: false },
-			uiTheme,
-			{ path: "/tmp/screenshot.png", question: "What error text is visible?" },
-		);
-		const resultOutput = sanitizeText(resultComponent.render(100).join("\n"));
-		expect(resultOutput).toContain("Inspect");
-		expect(resultOutput).toContain("image/png");
-		expect(resultOutput).toContain("Question:");
-		expect(resultOutput).toContain("What error text is visible?");
-		expect(resultOutput).toContain("openai/gpt-4o");
-		expect(resultOutput).toContain("more lines");
 	});
 
 	it("schema rejects unknown parameters", () => {

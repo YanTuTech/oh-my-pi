@@ -1,6 +1,6 @@
 # Vibe mode
 
-Vibe mode turns the top-level interactive session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. When available, `todo` belongs only to the parent director.
+Vibe mode turns the top-level Agent Runtime session into a **director** for persistent background worker sessions instead of letting it edit or execute commands itself. The director's active tools are reduced to `read`, optional parent-owned `todo`, and five worker-control tools. Workers do the searching, editing, running, and building; the director verifies their claims by reading touched files. When available, `todo` belongs only to the parent director.
 
 ## Enabling and disabling
 
@@ -8,7 +8,7 @@ Toggle it with the `/vibe` slash command:
 
 ```text
 /vibe                 # enter vibe mode
-/vibe fix the flaky test in packages/tui   # enter and submit a first directive
+/vibe fix the flaky test in packages/agent   # enter and submit a first directive
 /vibe                 # run again to exit
 ```
 
@@ -17,9 +17,7 @@ Toggle it with the `/vibe` slash command:
 - Exiting restores the prior toolset, cancels in-flight worker turns, kills every worker session in the scope, and persists terminal lifecycle records. A worker never outlives an intentional mode exit.
 - Vibe mode is mutually exclusive with both active **and paused** plan/goal modes; exit those modes first.
 - Starting, forking, moving, or handing off the session is rejected while vibe mode is active.
-- The status line shows a `Vibe` indicator while the mode is on.
-
-`/vibe` is an interactive-TUI command. The mode and worker lifecycle events are persisted with the parent session. Resuming a session whose current mode is `vibe` rehydrates completed workers as idle/parked sessions with their child transcripts; a turn interrupted by process restart is not resumed automatically. Explicitly killed or mode-exit workers stay terminal.
+The mode and worker lifecycle events are persisted with the parent session. Resuming a session whose current mode is `vibe` rehydrates completed workers as idle/parked sessions with their child transcripts; a turn interrupted by process restart is not resumed automatically. Explicitly killed or mode-exit workers stay terminal.
 
 ## The two worker tiers
 

@@ -1,7 +1,7 @@
 /**
- * ACP stdout-hygiene smoke: launching `omp acp` must not leak any banner,
+ * ACP stdout-hygiene smoke: launching the headless Runtime ACP host must not leak any banner,
  * progress text, or stray non-JSON bytes onto stdout — that channel is owned
- * by the JSON-RPC protocol. We spawn the CLI as a subprocess, send a single
+ * by the JSON-RPC protocol. We spawn the host as a subprocess, send a single
  * `initialize` frame, and assert the first stdout line parses cleanly as a
  * JSON-RPC response.
  */
@@ -13,7 +13,7 @@ import * as path from "node:path";
 type AcpProc = Bun.Subprocess<"pipe", "pipe", "pipe">;
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
-const cliEntry = path.join(repoRoot, "packages", "coding-agent", "src", "cli.ts");
+const acpHostEntry = path.join(repoRoot, "packages", "coding-agent", "src", "runtime-acp-host.ts");
 
 const cleanupRoots: string[] = [];
 let activeProc: AcpProc | undefined;
@@ -96,7 +96,7 @@ describe("ACP stdout hygiene", () => {
 		// dir forces a full re-transpile of the CLI's module graph on every
 		// run (~12s cold vs ~0.4s warm). XDG_* and PI_CODING_AGENT_DIR
 		// already isolate PI's on-disk state for this smoke test.
-		const proc = Bun.spawn(["bun", cliEntry, "acp"], {
+		const proc = Bun.spawn(["bun", acpHostEntry], {
 			cwd: repoRoot,
 			stdin: "pipe",
 			stdout: "pipe",

@@ -1,12 +1,12 @@
 # omp-rpc
 
-Typed Python bindings for the `omp --mode rpc` protocol used by the coding agent.
+Typed Python bindings for the headless Agent Runtime JSONL RPC protocol.
 
-This package wraps the newline-delimited JSON RPC transport exposed by the CLI and
+This package wraps the newline-delimited JSON RPC transport exposed by the Runtime host and
 provides:
 
 - typed command methods for the stable RPC surface
-- typed startup options for common `omp --mode rpc` flags such as thinking level,
+- typed startup options for Runtime host settings such as thinking level,
   tool selection, prompt appends, provider session IDs, and headless session toggles
 - typed protocol models for state, bash results, compaction, and session stats
 - automatic protocol v2 negotiation, lossless chunk reassembly, and stable message pagination
@@ -75,11 +75,11 @@ phases, and `get_state().todo_phases` returns the typed current todo state.
 By default the client runs:
 
 ```bash
-omp --mode rpc
+omp-runtime-rpc-host --mode rpc
 ```
 
 You can also point it at a custom command, which is useful inside this repo while
-developing against the Bun entrypoint:
+developing against the Bun Runtime entrypoint:
 
 ```python
 from omp_rpc import RpcClient
@@ -87,7 +87,7 @@ from omp_rpc import RpcClient
 with RpcClient(
     command=[
         "bun",
-        "packages/coding-agent/src/cli.ts",
+        "packages/coding-agent/src/runtime-rpc-host.ts",
         "--mode",
         "rpc",
         "--provider",

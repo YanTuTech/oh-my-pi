@@ -4,7 +4,7 @@
 
 ## Availability and prerequisites
 
-- `security.enabled` defaults to `false`. When disabled, `security_scan` is omitted from the available tool set and `security://` reads fail with an enablement message. Enable it in **Settings → Tools → Security** or set `security.enabled = true`.
+- `security.enabled` defaults to `false`. When disabled, `security_scan` is omitted from the available tool set and `security://` reads fail with an enablement message. Set `security.enabled = true` in Runtime settings to enable it.
 - The tool is discoverable, strict-schema, and classified as `exec`.
 - Native `preflight` requires a Git repository, an active model, the session model and authentication registries, and a stored OAuth credential for the active model's provider. API-key-only authentication is not accepted.
 - If several OAuth accounts exist and none is active, pass `credential_id`; a lone account is selected automatically. The immutable plan pins the credential row and recorded account/workspace identity. Execution and token refresh stay on that row rather than rotating to another account.

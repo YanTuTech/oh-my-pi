@@ -7,7 +7,7 @@ name: Warm bazel disk cache
 # the same image it runs on:
 #
 #   warm_darwin (macos-*)  -> scopes `release-darwin-*`, consumed by the
-#                             release_binary darwin jobs. Releases are the
+#                             release_native_darwin jobs. Releases are the
 #                             only other producers for these scopes and a
 #                             release always changes CONFIG_HASH (version
 #                             bump rewrites Cargo.toml/Cargo.lock), so
@@ -60,9 +60,9 @@ concurrency:
    cancel-in-progress: false
 
 jobs:
-   # Keeps the release_binary darwin scopes seeded near HEAD so a release's
+   # Keeps the release_native_darwin scopes seeded near HEAD so a release's
    # bazel build is the version-bump delta, not a cold graph. Scope, runner
-   # image, and target must stay in lockstep with the release_binary matrix
+   # image, and target must stay in lockstep with the release native-addon matrix
    # in ci.yml — a mismatched scope warms an archive nobody restores.
    warm_darwin:
       name: "Seed darwin release bazel cache: ${{ matrix.target }}"

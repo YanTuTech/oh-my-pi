@@ -8,7 +8,7 @@ import { discoverAuthStorage } from "../sdk";
 import { SessionManager } from "../session/session-manager";
 import { reserveStructuredSubagentId, runStructuredSubagent } from "../task/structured-subagent";
 import type { AgentProgress } from "../task/types";
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import { EventBus } from "../utils/event-bus";
 import type { CleanseCheckerDescriptor, CustomCleanseCheckerSpec } from "./checkers";
 import { CLEANSE_PARSER_KINDS } from "./parsers";

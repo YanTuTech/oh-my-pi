@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isRecord } from "@oh-my-pi/pi-utils";
-import type { ThemeColor } from "../modes/theme/theme";
+import type { ThemeColor } from "../extensibility/ui-contract";
 export type FindingPriority = "P0" | "P1" | "P2" | "P3";
 
 export interface FindingPriorityInfo {

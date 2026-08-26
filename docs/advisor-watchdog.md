@@ -64,7 +64,6 @@ Slash commands:
 | `/advisor status`    | Show each advisor's runtime state, model, context usage, token usage, and cost.                                                      |
 | `/advisor dump`      | Copy the compact transcript (all active advisors when a roster is present) to the clipboard.                                         |
 | `/advisor dump raw`  | Copy the full dump, including system prompt, tools, thinking, and calls.                                                             |
-| `/advisor configure` | Open the interactive TUI editor for project- or user-level `WATCHDOG.yml`. Non-TUI command hosts report that the editor is TUI-only. |
 
 If the subsystem is enabled but no legacy/default or roster model resolves, status reports the configured advisors as inactive/`no_model`.
 
@@ -208,7 +207,7 @@ Example:
 Especially watch for:
 
 - Changes that bypass the durable queue in `src/jobs/`.
-- UI renderer paths that display unsanitized tool output.
+- Host projection paths that expose unsanitized tool output.
 - New worker spawns that do not re-enter the CLI host.
 ```
 
@@ -328,8 +327,8 @@ Paths derive from the owning session file (not the shared artifacts root), so ea
 Why a file:
 
 - **Usage attribution.** `omp stats` scans each session folder recursively, so advisor assistant turns (with their usage/cost) are attributed to the same project/session like any other subagent. Advisor "session update" prompts are persisted as `synthetic`, agent-attributed user messages so they never inflate user-message metrics.
-- **Observability.** [Agent Hub](./agent-hub.md) discovers legacy and named `__advisor*.jsonl` files on open and shows each as a read-only `advisor`-kind transcript under its owning session.
+- **Observability.** Session listing APIs discover legacy and named `__advisor*.jsonl` files and expose each as a read-only `advisor`-kind transcript under its owning session for host projection.
 
 The file follows session switches: on `/new`, resume/switch, and branch the recorder reopens at the new session's path on the next advisor turn; before a `/drop` deletes the old artifacts dir the recorder feed is detached and drained so a queued write cannot recreate the deleted file. The on-disk log is append-only and independent of the in-memory context — re-primes and compaction never truncate it.
 
-The advisor is never a peer. The `advisor`-kind registry ref is excluded from every agent-facing surface — the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions — and cannot be messaged (`hub` send and collab chat refuse it) or [revived or killed from Agent Hub](./agent-hub.md#persisted-agents-and-advisors) or collab. It is not addressable as a peer, regardless of what tools it has been granted.
+The advisor is never a peer. The `advisor`-kind registry ref is excluded from the `hub` peer roster and broadcast targets, the subagent peer prompt, and the `history://` index/lookup/completions. It cannot be messaged, revived, killed, or addressed through collaboration host actions, regardless of what tools it has been granted.

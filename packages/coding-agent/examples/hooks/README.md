@@ -5,11 +5,8 @@ Example hooks for omp-coding-agent.
 ## Usage
 
 ```bash
-# Load a hook with --hook flag
-omp --hook examples/hooks/permission-gate.ts
-
-# Or copy to hooks directory for auto-discovery
-cp permission-gate.ts ~/.omp/agent/hooks/
+# Pass the hook module as an additional extension path in your Runtime host.
+# runtime-rpc-host also accepts: --extension examples/hooks/permission-gate.ts
 ```
 
 ## Examples
@@ -24,10 +21,8 @@ cp permission-gate.ts ~/.omp/agent/hooks/
 | `dirty-repo-guard.ts`    | Prevents session changes with uncommitted git changes                          |
 | `auto-commit-on-exit.ts` | Auto-commits on exit using last assistant message for commit message           |
 | `custom-compaction.ts`   | Custom compaction that summarizes entire conversation                          |
-| `qna.ts`                 | Extracts questions from last response into editor via `ctx.ui.setEditorText()` |
-| `snake.ts`               | Snake game with custom UI, keyboard handling, and session persistence          |
-| `status-line.ts`         | Shows turn progress in footer via `ctx.ui.setStatus()` with themed colors      |
-| `handoff.ts`             | Transfer context to a new focused session via `/handoff <goal>`                |
+| `qna.ts`                 | Sends extracted questions through the host interaction contract                |
+| `handoff.ts`             | Transfer context to a new focused Runtime session                              |
 
 ## Writing Hooks
 

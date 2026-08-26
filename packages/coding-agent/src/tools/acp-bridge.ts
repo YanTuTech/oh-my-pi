@@ -9,10 +9,10 @@
  */
 
 import { FileChangeType, notifyWorkspaceWatchedFiles } from "../lsp/client";
-import type { ToolSession } from ".";
 import { invalidateFsScanAfterWrite } from "./fs-cache-invalidation";
 import { isInternalUrlPath } from "./path-utils";
 import { resolvePlanPath, targetsLocalSandbox } from "./plan-mode-guard";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 /**

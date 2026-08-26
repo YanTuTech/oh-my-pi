@@ -21,7 +21,7 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import { importRoomKey } from "@oh-my-pi/pi-coding-agent/collab/crypto";
-import { CollabHost } from "@oh-my-pi/pi-coding-agent/collab/host";
+import { CollabHost, type CollabHostContext } from "@oh-my-pi/pi-coding-agent/collab/host";
 import {
 	COLLAB_PROTO,
 	type CollabFrame,
@@ -34,7 +34,6 @@ import {
 	MAX_REPLICATED_PAYLOAD_BYTES,
 	shrinkForReplication,
 } from "@oh-my-pi/pi-coding-agent/collab/replication-shrink";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 import type { SessionEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
 
 interface RelayData {
@@ -144,7 +143,7 @@ function makeOversizedSnapshot(bigBytes: number): OversizedSnapshot {
 }
 
 interface HostHarness {
-	ctx: InteractiveModeContext;
+	ctx: CollabHostContext;
 	statusMessages: string[];
 }
 
@@ -165,21 +164,15 @@ function makeHostContext(snapshot: OversizedSnapshot): HostHarness {
 			sessionName: "big",
 			model: undefined,
 			thinkingLevel: undefined,
+			getContextUsage: () => ({ usedTokens: 0, contextWindow: 0, percent: 0 }),
 			subscribe: () => () => {},
 			emitNotice: () => {},
 			promptCustomMessage: () => Promise.resolve(),
 			abort: () => Promise.resolve(),
 		},
 		eventBus: undefined,
-		statusLine: {
-			setCollabStatus: () => {},
-			invalidate: () => {},
-			getCachedContextBreakdown: () => ({ usedTokens: 0, contextWindow: 0 }),
-		},
-		ui: { requestRender: () => {} },
-		showStatus: (msg: string) => statusMessages.push(msg),
-		collabHost: undefined,
-	} as unknown as InteractiveModeContext;
+		onStatus: (msg: string) => statusMessages.push(msg),
+	} as unknown as CollabHostContext;
 	return { ctx, statusMessages };
 }
 

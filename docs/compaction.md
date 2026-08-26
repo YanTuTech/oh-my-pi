@@ -152,7 +152,7 @@ Including `snapcompact` in `compaction.methodOrder` replaces the LLM summarizati
 
 ### Display transcript
 
-Compaction no longer visually restarts the conversation. The TUI renders the **display transcript** (`buildSessionContext({ transcript: true })` / `AgentSession.buildTranscriptSessionContext()`): every path entry in chronological order, with each compaction shown inline as a slim divider — `── 📷 compacted · ctrl+o ──` — at the point it fired. Expanding (ctrl+o) reveals the summary. Only the LLM context resets at the compaction boundary; the scrollback above the divider stays intact, including across session resume.
+`buildSessionContext({ transcript: true })` / `AgentSession.buildTranscriptSessionContext()` returns every path entry in chronological order, including each compaction at the point it fired. Only the LLM context resets at the compaction boundary; the earlier transcript remains available across session resume.
 
 ### Pre-compaction pruning
 
@@ -244,7 +244,7 @@ Prompt selection:
 - first compaction: `compaction-summary.md`
 - iterative compaction with prior summary: `compaction-update-summary.md`
 - split-turn second pass: `compaction-turn-prefix.md`
-- short UI summary: `compaction-short-summary.md`
+- short compaction summary: `compaction-short-summary.md`
 - handoff document: `handoff-document.md` (used by `generateHandoff(...)`, not serialized compaction)
 
 Remote summarization modes:
@@ -404,7 +404,7 @@ Post-navigation event exposing new/old leaf and optional summary entry.
 
 - Manual compaction aborts current agent operation first.
 - `abortCompaction()` cancels manual compaction, auto-compaction, and handoff generation controllers.
-- Auto compaction emits start/end session events for UI/state updates.
+- Auto compaction emits start/end session events for host/state updates.
 - Auto compaction can try multiple model candidates and retry transient failures; long retry delays prefer the next candidate when one is available.
 - Overflow errors are excluded from generic retry path because they are handled by context promotion/compaction.
 - If auto-compaction fails:

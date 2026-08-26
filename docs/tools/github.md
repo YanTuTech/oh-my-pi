@@ -7,7 +7,6 @@
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/github.md`
 - Key collaborators:
   - `packages/coding-agent/src/tools/gh-format.ts` — shorten commit SHAs for summaries.
-  - `packages/coding-agent/src/tools/gh-renderer.ts` — TUI rendering, especially `run_watch` live/result views.
   - `packages/coding-agent/src/utils/git.ts` — `gh`/`git` process wrappers, repo locking, branch config writes.
   - `packages/utils/src/dirs.ts` — base directory for dedicated PR worktrees.
   - `packages/coding-agent/src/sdk.ts` — session artifact allocation hook.
@@ -15,7 +14,7 @@
 
 ## Availability and approval
 
-- `github.enabled` defaults to `false`; enable the GitHub CLI tool in **Settings → Tools** before use.
+- `github.enabled` defaults to `false`; set it to `true` in Runtime settings before use.
 - The tool is discoverable and strict-schema, and is created only when `gh` is available on `PATH`. Authentication is checked by the CLI when an operation runs.
 - `repo_view`, `file_read`, every `search_*` operation, and `run_watch` request read approval. `pr_create`, `pr_checkout`, and `pr_push` request execution approval.
 
@@ -52,10 +51,10 @@ The tool returns a single text result built by `buildTextResult()` in `packages/
 
 - `content`: one text block. Multi-item ops join sections with blank lines and `---` separators.
 - `sourceUrl`: set for repository/file/PR/run results when a canonical URL is known.
-- `details`: optional structured metadata used by the TUI renderer.
+- `details`: optional structured metadata for RPC/SDK consumers.
   - Common fields: `artifactId`, `repo`, `branch`, `worktreePath`, `remote`, `remoteBranch`, `headSha`, `runId`, `runIds`, `status`, `conclusion`, `failedJobs`.
   - `pr_checkout` adds `checkouts: GhPrCheckoutSummary[]`.
-  - `run_watch` adds `watch: GhRunWatchViewDetails`, which drives the custom live/result renderer in `packages/coding-agent/src/tools/gh-renderer.ts`.
+  - `run_watch` adds `watch: GhRunWatchViewDetails` for live and final host views.
 - Artifact trailer: when `artifactId` is present, the text body gets an appended line like `Full failed-job logs: artifact://<id>`.
   - `run_watch` allocates artifacts with `session.allocateOutputArtifact("github")`; persistent sessions therefore save failed-log bodies as `<artifact-dir>/<id>.github.log`.
 
@@ -237,7 +236,7 @@ Watch flow:
 - Failed-job logs are fetched with `gh api /repos/<repo>/actions/jobs/<jobId>/logs` via `git.github.run()`, not `json()`. Non-zero exit leaves `available: false` instead of failing the whole watch.
 - Inline result includes only the last `tail` lines per failed job. The saved artifact contains full logs (`mode: "full"`).
 - In commit mode, success is intentionally double-checked: once all known runs are successful, the tool waits one more poll interval and succeeds only if the set of run IDs is unchanged. This avoids returning before late workflow runs appear for the same commit.
-- `details.watch` drives a specialized renderer in `packages/coding-agent/src/tools/gh-renderer.ts`; non-watch results fall back to generic text rendering.
+- `details.watch` carries the structured live/final watch state; the text result remains complete on its own.
 
 ## Side Effects
 - Filesystem
@@ -252,10 +251,9 @@ Watch flow:
   - `pr_checkout` and `pr_push` also invoke git helpers from `packages/coding-agent/src/utils/git.ts`.
 - Session state (transcript, memory, jobs, checkpoints, registries)
   - `run_watch` consumes `session.allocateOutputArtifact()` when failed-job logs are persisted.
-  - Returned `details` objects carry run/checkouts metadata for the renderer/UI.
-- User-visible prompts / interactive UI
+  - Returned `details` objects carry run/checkouts metadata for RPC/SDK consumers.
+- Interactive subprocess behavior
   - `gh` interactive editor fallback is suppressed for `pr_create` by forcing either `--body-file` or `--body ""`.
-  - `gh-renderer` provides compact headers for all ops and a custom live watch view for `run_watch`.
 - Background work / cancellation
   - `run_watch` loops until success/failure and uses `scheduler.wait()` between polls.
   - `GithubTool.execute()` is wrapped in `untilAborted()`; `git.github.run()` forwards the abort signal into `Bun.spawn()`.
@@ -302,4 +300,4 @@ Watch flow:
 - Worktree write serialization is keyed by the primary repo root, not the current worktree path, because git worktrees share `.git/config`, `packed-refs`, commit-graph, and worktree metadata files.
 - `search_repos` is the only search op that never forwards `repo`; repository scoping must be expressed in the query itself.
 - `run_watch` success on commit mode means “all observed runs succeeded and no additional runs appeared one poll later”, not merely “latest poll looked green”.
-- The TUI renderer collapses failed log previews unless the result view is expanded; the underlying text result still contains the same tailed lines plus any artifact reference.
+- The text result contains the tailed failed-log lines plus any artifact reference; `details.watch` exposes the same state structurally.

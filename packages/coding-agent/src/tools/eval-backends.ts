@@ -1,5 +1,5 @@
 import { $flag } from "@oh-my-pi/pi-utils";
-import type { ToolSession } from ".";
+import type { ToolSession } from "./runtime";
 
 export interface EvalBackendsAllowance {
 	python: boolean;

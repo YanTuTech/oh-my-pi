@@ -10,17 +10,16 @@ import type {
 	AgentToolUpdateCallback,
 } from "@oh-my-pi/pi-agent-core";
 import type { CredentialDisabledEvent, ImageContent, Model, ProviderResponseMetadata } from "@oh-my-pi/pi-ai";
-import type { KeyId } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
-import { type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
+import type { KeyId, Theme } from "../ui-contract";
 import { ManagedTimers } from "./managed-timers";
 import { createExtensionModelQuery } from "./model-api";
 import type {
@@ -418,7 +417,7 @@ const noOpUIContext: ExtensionUIContext = {
 	addAutocompleteProvider: () => {},
 	setEditorComponent: () => {},
 	get theme() {
-		return theme;
+		return undefined as unknown as Theme;
 	},
 	getAllThemes: () => Promise.resolve([]),
 	getTheme: () => Promise.resolve(undefined),
@@ -621,9 +620,8 @@ export class ExtensionRunner {
 	 * field — keeps every `ExtensionContext` built below in sync with this
 	 * session's actual, current directory. Deliberately `sessionManager.getCwd()`
 	 * rather than `getProjectDir()`: the latter is a single process-wide value
-	 * that only the interactive TUI's `/move` handler happens to also update
-	 * (`InteractiveModeContext#applyCwdChange`) — an SDK/ACP host running
-	 * several concurrent sessions each with their own `cwd` (see
+	 * that a process-level host might also update — an SDK/ACP host running
+	 * several concurrent sessions, each with their own `cwd` (see
 	 * `CreateAgentSessionOptions.cwd`) must never have one session's move
 	 * leak into another's `ctx.cwd` by reading a shared global.
 	 */

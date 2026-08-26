@@ -1,6 +1,6 @@
 {
 	"extends": "../tsconfig.workspace.json",
-	"include": ["src", "scripts", "test"],
+	"include": ["src/tool-render", "src/env.d.ts", "scripts/build-tool-views.ts", "test/tool-view.test.tsx"],
 	"compilerOptions": {
 		"jsx": "react-jsx",
 		"lib": ["ES2024", "DOM", "DOM.Iterable"],

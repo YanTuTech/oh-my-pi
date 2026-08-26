@@ -326,8 +326,7 @@ export function hasObsidian(): boolean {
 	return isVaultEnabled() && resolveObsidianBinary() !== null;
 }
 
-const VAULT_DISABLED_MESSAGE =
-	"vault:// is disabled. Enable it by setting `vault.enabled = true` (Settings → Tools → Obsidian Vault).";
+const VAULT_DISABLED_MESSAGE = "vault:// is disabled. Enable it by setting `vault.enabled = true` in Runtime settings.";
 
 export class VaultDisabledError extends Error {
 	constructor() {

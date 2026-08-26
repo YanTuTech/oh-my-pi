@@ -167,11 +167,7 @@ Optional rendering hooks:
 
 The normal SDK and filesystem-discovery paths wrap custom tools as extensions. On those paths, `renderResult` receives only the three arguments above; the bridge does not forward the original tool arguments. The public `CustomTool` type retains an optional fourth `args` parameter for direct `CustomToolAdapter` consumers.
 
-Runtime behavior in TUI:
-
-- If hooks exist, tool output is rendered inside a `Box` container.
-- `renderResult` receives `{ expanded, isPartial, spinnerFrame? }` as its `options` argument.
-- Renderer errors are caught and logged; UI falls back to default text rendering.
+The headless Runtime retains these callbacks as extension compatibility metadata but does not invoke a bundled renderer. A host adapter may consume them; tool content and structured `details` remain the portable contract.
 
 ## Session/state handling
 
@@ -205,6 +201,6 @@ Use `ctx.sessionManager` to reconstruct state from history when branch/session c
 ## Real constraints to design for
 
 - Tool names must be globally unique in the active registry.
-- Prefer deterministic, schema-shaped outputs in `details` for renderer/state reconstruction.
+- Prefer deterministic, schema-shaped outputs in `details` for host/state reconstruction.
 - Guard UI usage with `pi.hasUI`.
 - Treat `.md`/`.json` in tool directories as metadata, not executable modules.

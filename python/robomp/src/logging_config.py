@@ -113,12 +113,12 @@ class JsonFormatter(logging.Formatter):
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
-# Dashboard polls these endpoints every couple seconds; mute them in access logs.
+# Status consumers poll these endpoints frequently; mute them in access logs.
 _ACCESS_MUTE_PATHS = ("/api/status", "/api/logs", "/healthz", "/readyz")
 
 
-class _MuteDashboardPolling(logging.Filter):
-    """Drop uvicorn.access lines for high-frequency dashboard polling."""
+class _MuteStatusPolling(logging.Filter):
+    """Drop uvicorn.access lines for high-frequency status polling."""
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
         args = record.args
@@ -163,7 +163,7 @@ def configure_logging(log_dir: Path | None = None, level: int = logging.INFO) ->
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").addFilter(_MuteDashboardPolling())
+    logging.getLogger("uvicorn.access").addFilter(_MuteStatusPolling())
     _INITIALIZED = True
 
 

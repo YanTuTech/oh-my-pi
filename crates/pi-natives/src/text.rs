@@ -598,8 +598,8 @@ const HANGUL_COMPAT_JAMO_NARROW_WIDTH: usize = 1;
 ///   2 = force wide (2 cells)
 ///   3 = force Unicode width (no correction)
 /// The actual width is decided by the *client* terminal, not the host OS, so it
-/// is resolved at runtime from the terminal identity (see packages/tui
-/// terminal.ts) and pushed here through
+/// is resolved at runtime from the terminal identity (see the host integration
+/// in `packages/utils/src/terminal-host.ts`) and pushed here through
 /// `set_hangul_compat_jamo_width_override`.
 static HANGUL_COMPAT_JAMO_WIDTH_OVERRIDE: AtomicU8 = AtomicU8::new(0);
 

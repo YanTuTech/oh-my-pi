@@ -4,24 +4,21 @@
  *
  * The default mode publishes public JS packages and the `@oh-my-pi/pi-natives`
  * core package. Generated native leaf packages are published separately with
- * `--native-leaf <tag>` from the release_binary matrix after that matrix entry
- * downloads the matching `.node` artifacts.
+ * `--native-leaf <tag>` after the release workflow downloads the matching
+ * `.node` artifacts.
  *
  * For each public TypeScript package we:
  *   1. Emit `.d.ts` declarations into `dist/types/` so consumers get
  *      stable types regardless of their tsconfig `lib`.
  *   2. Rewrite `package.json` in place — every `types`/`exports[*].types`
  *      that points at `./src/*.ts(x)` is repointed to `./dist/types/*.d.ts`,
- *      `dist/types` (plus `dist/client` for `stats`) is added to `files`,
- *      and packages with a `publishBin` override get their `bin` swapped to
- *      the prepack bundle (coding-agent: `src/cli.ts` → `dist/cli.js`).
+ *      and `dist/types` is added to `files`.
  *      Packages flagged `publishJs` (omptype) additionally emit transpiled
  *      per-module JS into `dist/js/` and get their runtime entries (`main`,
  *      `exports[*]` import paths) repointed there, with a `bun` condition
  *      keeping TS-source resolution for Bun consumers — so the published
  *      package runs on plain Node. The on-repo manifest keeps pointing at
- *      source so local dev and source installs (`bun link`,
- *      `install.sh --source`) work without a build.
+ *      source for local development and package linking.
  *   3. Pack with `bun pm pack` (resolves the `catalog:`/`workspace:`
  *      protocols npm cannot, and runs each package's `prepack` lifecycle),
  *      then publish the resolved tarball with `npm publish` — see
@@ -57,12 +54,6 @@ export interface PublishPackage {
 	 * plain Node. Requires the package to be dependency-free of Bun APIs.
 	 */
 	publishJs?: boolean;
-	/**
-	 * `bin` map for the published manifest. The on-repo manifest points `bin`
-	 * at TS source so source installs (`bun link`, `install.sh --source`) work
-	 * without a build; publish swaps in the `prepack` bundle.
-	 */
-	publishBin?: Readonly<Record<string, string>>;
 }
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
@@ -151,19 +142,12 @@ export const packages: PublishPackage[] = [
 	{ dir: "packages/catalog", kind: "typescript" },
 	{ dir: "packages/ai", kind: "typescript" },
 	{ dir: "packages/natives", kind: "native" },
-	{ dir: "packages/tui", kind: "typescript" },
 	{ dir: "packages/hashline", kind: "typescript" },
 	{ dir: "packages/mnemopi", kind: "typescript" },
 	{ dir: "packages/snapcompact", kind: "typescript" },
-	{
-		dir: "packages/stats",
-		kind: "typescript",
-		preBuild: [["bun", "run", "build"]],
-		extraFiles: ["dist/client"],
-		extraTypeConfigs: ["tsconfig.publish.client.json"],
-	},
+	{ dir: "packages/stats", kind: "typescript" },
 	{ dir: "packages/agent", kind: "typescript" },
-	{ dir: "packages/coding-agent", kind: "typescript", publishBin: { omp: "dist/cli.js" } },
+	{ dir: "packages/coding-agent", kind: "typescript" },
 ];
 
 function rewriteSrcToTypes(value: string): string {
@@ -218,7 +202,6 @@ function rewriteExports(exports: JsonValue, publishJs: boolean): JsonValue {
 export async function rewriteManifest(pkg: PublishPackage, write: boolean): Promise<PackageManifest> {
 	const manifestPath = path.join(repoRoot, pkg.dir, "package.json");
 	const manifest = (await Bun.file(manifestPath).json()) as PackageManifest;
-	if (pkg.publishBin) manifest.bin = { ...pkg.publishBin };
 	if (typeof manifest.types === "string" && manifest.types.startsWith("./src/")) {
 		manifest.types = rewriteSrcToTypes(manifest.types);
 	}
@@ -263,22 +246,6 @@ async function preparePackage(pkg: PublishPackage): Promise<PackageManifest> {
 		await fixEmitExtensions(path.join(pkgDir, "dist/js"), ".js");
 	}
 	return rewriteManifest(pkg, !isDryRun);
-}
-
-/**
- * Apply only the published `bin` rewrite to a package's working-tree
- * manifest. Used by `scripts/install-tests/run-ci.sh` to pack the coding
- * agent with its published topology (bin → prepack bundle) without running
- * the type-emission steps; the caller backs up and restores the manifest.
- */
-export async function applyPublishBin(pkgRelDir: string, write: boolean): Promise<PackageManifest> {
-	const pkg = packages.find(entry => entry.dir === pkgRelDir);
-	if (!pkg?.publishBin) throw new Error(`No publishBin override declared for ${pkgRelDir}`);
-	const manifestPath = path.join(repoRoot, pkgRelDir, "package.json");
-	const manifest = (await Bun.file(manifestPath).json()) as PackageManifest;
-	manifest.bin = { ...pkg.publishBin };
-	if (write) await Bun.write(manifestPath, `${JSON.stringify(manifest, null, "\t")}\n`);
-	return manifest;
 }
 
 function buildNativeOptionalDependencies(version: string): JsonObject {

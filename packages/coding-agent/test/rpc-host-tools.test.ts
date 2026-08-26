@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@oh-my-pi/pi-agent-core";
-import { defineRpcClientTool, RpcClient } from "@oh-my-pi/pi-coding-agent/modes";
 import { RpcHostToolBridge } from "@oh-my-pi/pi-coding-agent/modes/rpc/host-tools";
+import { defineRpcClientTool, RpcClient } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-client";
 import type {
 	RpcHostToolCallRequest,
 	RpcHostToolCancelRequest,
@@ -189,7 +189,7 @@ function handle(frame) {
 		);
 
 		const client = new RpcClient({
-			cliPath: scriptPath,
+			rpcHostPath: scriptPath,
 			customTools: [
 				defineRpcClientTool<{ message: string }>({
 					name: "echo_host",

@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { importRoomKey } from "@oh-my-pi/pi-coding-agent/collab/crypto";
-import { CollabHost } from "@oh-my-pi/pi-coding-agent/collab/host";
+import { CollabHost, type CollabHostContext } from "@oh-my-pi/pi-coding-agent/collab/host";
 import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@oh-my-pi/pi-coding-agent/collab/protocol";
 import { CollabSocket } from "@oh-my-pi/pi-coding-agent/collab/relay-client";
-import type { InteractiveModeContext } from "@oh-my-pi/pi-coding-agent/modes/types";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { installInMemoryRelay, uninstallInMemoryRelay } from "./helpers/in-memory-relay";
 
-function makeHostContext(manager: SessionManager): InteractiveModeContext {
+function makeHostContext(manager: SessionManager): CollabHostContext {
 	return {
 		settings: { get: () => "" },
 		sessionManager: manager,
@@ -17,21 +16,14 @@ function makeHostContext(manager: SessionManager): InteractiveModeContext {
 			sessionName: "discard marker",
 			model: undefined,
 			thinkingLevel: undefined,
+			getContextUsage: () => ({ usedTokens: 0, contextWindow: 0, percent: 0 }),
 			subscribe: () => () => {},
 			emitNotice: () => {},
 			promptCustomMessage: () => Promise.resolve(),
 			abort: () => Promise.resolve(),
 		},
 		eventBus: undefined,
-		statusLine: {
-			setCollabStatus: () => {},
-			invalidate: () => {},
-			getCachedContextBreakdown: () => ({ usedTokens: 0, contextWindow: 0 }),
-		},
-		ui: { requestRender: () => {} },
-		showStatus: () => {},
-		collabHost: undefined,
-	} as unknown as InteractiveModeContext;
+	} as unknown as CollabHostContext;
 }
 
 beforeAll(installInMemoryRelay);

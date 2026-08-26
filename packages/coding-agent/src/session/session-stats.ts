@@ -9,12 +9,8 @@ import type { AssistantMessage, Model, ProviderResponseMetadata, Usage } from "@
 import { isRecord } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import type { ContextUsage } from "../extensibility/extensions/types";
-import {
-	computeNonMessageBreakdown,
-	computeNonMessageTokens,
-	type NonMessageTokenSource,
-} from "../modes/utils/context-usage";
 import type { ContextUsageBreakdown, SessionStats } from "./agent-session-types";
+import { computeNonMessageBreakdown, computeNonMessageTokens, type NonMessageTokenSource } from "./context-usage";
 import { getLatestCompactionEntry } from "./session-context";
 import type { SessionManager } from "./session-manager";
 

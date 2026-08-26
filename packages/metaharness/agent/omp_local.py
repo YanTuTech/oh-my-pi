@@ -1,18 +1,18 @@
-"""Harbor agent that runs the LOCAL oh-my-pi (`omp`) build inside task containers.
+"""Harbor agent that runs the local Agent Runtime RPC host in task containers.
 
 Unlike Harbor's built-in `pi` agent (which `npm i -g @mariozechner/pi-coding-agent`),
 this runs the working tree at `/work/pi`. Install modes (`OMP_BENCH_INSTALL`):
 
   * `source` (default): the runner bind-mounts the repo read-only plus a
-    prebuilt linux `node_modules` tree and a linux `bun` binary; omp runs
-    straight from `packages/coding-agent/src/cli.ts`. Zero-network setup, and
+    prebuilt linux `node_modules` tree and a linux `bun` binary; the host runs
+    straight from `packages/coding-agent/src/runtime-rpc-host.ts`. Zero-network setup, and
     host TS edits apply to the next trial with no rebuild (Rust natives load
     from the in-tree `packages/natives/native/*.node` prebuilds).
   * `local`: the runner packs `packages/coding-agent` with `bun pm pack`
-    (bundles every workspace TS package into `dist/cli.js`) and hands us the
+    (including the Runtime bundle under `dist/runtime`) and hands us the
     tarball path; we upload it, install Bun, `bun install` the bundle's
-    external deps + the platform native addon, and run `bun .../dist/cli.js`.
-  * binary (`--binary`): a self-contained compiled omp binary is uploaded.
+    external deps + the platform native addon, and runs the bundled RPC host.
+  * binary (`--binary`): a compatible self-contained Runtime RPC host is uploaded.
 
 Auth never enters the container: a generated `~/.omp/agent/models.yml` routes the
 configured providers' `baseUrl` at the host's pm2 auth-gateway (default
@@ -226,7 +226,7 @@ class OmpLocal(BaseInstalledAgent):
         # off by default so search-using tasks don't false-negative on 401s.
         self._web_search = _truthy(_env("OMP_BENCH_WEB_SEARCH", "0"))
         # Extra env (PI_* dialect knobs, explicit --env) the runner forwards into
-        # the in-container omp run, JSON-encoded in OMP_BENCH_FORWARD_ENV.
+        # the in-container Runtime run, JSON-encoded in OMP_BENCH_FORWARD_ENV.
         self._forward_env = self._parse_forward_env()
         # Source-mount paths (defaults must match the runner's compose overlay).
         self._source_dir = _env("OMP_BENCH_SOURCE_DIR", "/opt/omp/src")
@@ -235,7 +235,7 @@ class OmpLocal(BaseInstalledAgent):
         # Resolved during install(); reused by version + run commands.
         self._home = "/root"
         self._bun = "/root/.bun/bin/bun"
-        self._cli = "/root/.omp-bench/app/dist/cli.js"
+        self._host = "/root/.omp-bench/app/dist/runtime/runtime-rpc-host.js"
         self._binary_arm64 = _env("OMP_BENCH_BINARY_ARM64")
         self._binary_x64 = _env("OMP_BENCH_BINARY_X64")
         self._binary = bool(self._binary_arm64 or self._binary_x64)
@@ -251,11 +251,7 @@ class OmpLocal(BaseInstalledAgent):
 
     @override
     def get_version_command(self) -> str | None:
-        if self._binary:
-            return f"{shlex.quote(self._cli)} --version"
-        return self._wrap(
-            f"{shlex.quote(self._bun)} {shlex.quote(self._cli)} --version"
-        )
+        return None
 
     @override
     def parse_version(self, stdout: str) -> str:
@@ -290,7 +286,7 @@ class OmpLocal(BaseInstalledAgent):
             await self._install_binary(environment)
         elif self._install_mode == "source":
             # Everything is bind-mounted by the runner; nothing to download.
-            self._cli = await self._install_source(environment)
+            self._host = await self._install_source(environment)
         else:
             # 1) System deps (root). curl+unzip for the Bun installer; ca-certs for TLS.
             await self.exec_as_root(
@@ -318,9 +314,9 @@ class OmpLocal(BaseInstalledAgent):
             )
             self._bun = f"{self._home}/.bun/bin/bun"
             if self._install_mode == "published":
-                self._cli = await self._install_published(environment)
+                self._host = await self._install_published(environment)
             else:
-                self._cli = await self._install_local(environment)
+                self._host = await self._install_local(environment)
 
         # 3) Auth + model config under $HOME/.omp/agent.
         if self._gateway_on:
@@ -350,20 +346,20 @@ class OmpLocal(BaseInstalledAgent):
                 f"({self._source_arch}); use --binary for emulated-arch tasks"
             )
         self._bun = self._source_bun
-        cli = f"{self._source_dir}/packages/coding-agent/src/cli.ts"
+        host = f"{self._source_dir}/packages/coding-agent/src/runtime-rpc-host.ts"
         q = shlex.quote
         await self.exec_as_agent(
             environment,
             command=(
                 "set -e; "
                 f"test -x {q(self._source_bun)} || {{ echo 'omp source mode: bun mount missing' >&2; exit 5; }}; "
-                f"test -f {q(cli)} || {{ echo 'omp source mode: repo mount missing' >&2; exit 5; }}; "
+                f"test -f {q(host)} || {{ echo 'Runtime source mode: repo mount missing' >&2; exit 5; }}; "
                 f"test -d {q(self._source_dir + '/node_modules/@oh-my-pi')} || "
                 "{ echo 'omp source mode: linux deps mount missing' >&2; exit 5; }; "
                 f"{q(self._source_bun)} --version"
             ),
         )
-        return cli
+        return host
 
     async def _install_local(self, environment: BaseEnvironment) -> str:
         if not self._tarball:
@@ -393,7 +389,7 @@ class OmpLocal(BaseInstalledAgent):
             ),
             timeout_sec=900,
         )
-        return f"{app}/dist/cli.js"
+        return f"{app}/dist/runtime/runtime-rpc-host.js"
 
     async def _install_binary(self, environment: BaseEnvironment) -> str:
         """Probe container arch, upload only the matching self-contained omp binary."""
@@ -421,7 +417,7 @@ class OmpLocal(BaseInstalledAgent):
             environment,
             command=f"cp {shlex.quote(staging)} {shlex.quote(dst)} && chmod +x {shlex.quote(dst)}",
         )
-        self._cli = dst
+        self._host = dst
         return dst
 
     async def _install_published(self, environment: BaseEnvironment) -> str:
@@ -437,7 +433,7 @@ class OmpLocal(BaseInstalledAgent):
             ),
             timeout_sec=900,
         )
-        return f"{app}/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js"
+        return f"{app}/node_modules/@oh-my-pi/pi-coding-agent/dist/runtime/runtime-rpc-host.js"
 
     async def _write_models_yaml(self, environment: BaseEnvironment) -> None:
         if self._models_yaml_path and os.path.isfile(self._models_yaml_path):
@@ -548,12 +544,10 @@ class OmpLocal(BaseInstalledAgent):
         provider, model = self.model_name.split("/", 1)
 
         if self._binary:
-            parts = [shlex.quote(self._cli)]
+            parts = [shlex.quote(self._host)]
         else:
-            parts = [shlex.quote(self._bun), shlex.quote(self._cli)]
+            parts = [shlex.quote(self._bun), shlex.quote(self._host)]
         parts += [
-            "--print",
-            "--mode json",
             f"--provider {shlex.quote(provider)}",
             f"--model {shlex.quote(model)}",
             "--no-session",
@@ -563,15 +557,19 @@ class OmpLocal(BaseInstalledAgent):
         if self._thinking:
             parts.append(f"--thinking {shlex.quote(self._thinking)}")
         parts.extend(shlex.quote(arg) for arg in self._agent_args)
-        # POSIX positional separator: some task prompts start with "-" (e.g. a
-        # markdown bullet, as in pytorch-model-recovery). Without this, omp parses
-        # the prompt as an unknown flag and exits 2. `--` forces positional mode.
-        parts.append("--")
-        parts.append(shlex.quote(instruction))
-        # No pipes/stdbuf (absent in minimal images): redirect raw JSONL to the
-        # mounted agent log dir; populate_context_post_run parses it on the host.
-        run = " ".join(parts) + f" > /logs/agent/{_OUTPUT_FILENAME} 2>&1"
-        # Exec env for the omp run. Direct-auth (no-gateway) mode contributes the
+        prompt_frame = json.dumps(
+            {"id": "harbor-prompt", "type": "prompt", "message": instruction},
+            separators=(",", ":"),
+        )
+        # The shell builtin `printf` writes one RPC frame then closes stdin.
+        # The host drains the in-flight turn before exiting and keeps stdout as
+        # protocol-only JSONL for populate_context_post_run.
+        run = (
+            f"printf '%s\\n' {shlex.quote(prompt_frame)} | "
+            + " ".join(parts)
+            + f" > /logs/agent/{_OUTPUT_FILENAME} 2>&1"
+        )
+        # Exec env for the Runtime run. Direct-auth (no-gateway) mode contributes the
         # selected providers' keys (via exec env, never argv); forwarded PI_* /
         # --env knobs apply last so an explicit --env always wins.
         run_env: dict[str, str] = {}

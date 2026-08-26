@@ -33,7 +33,7 @@ git format-patch b21b42d032919de2f2e6920a76fa9a37c3920c0a..HEAD --stdout > chang
 Most runtime TypeScript sources omit `.js` in internal imports, but several current entrypoints and tool modules keep `.js` for ESM/runtime compatibility. Follow the surrounding file and package export style; do not blanket-strip or blanket-add extensions.
 
 - In `packages/coding-agent` runtime sources, prefer extensionless internal imports when the surrounding module does, but preserve existing `.js` imports in files that already require them.
-- In `packages/tui/test` and `packages/natives/bench`, keep `.js` where surrounding files already use it.
+- In `packages/natives/bench`, keep `.js` where surrounding files already use it.
 - Keep real file extensions when required by tooling or import assertions (e.g., `.json`, `.css`, `.md` text embeds).
 - Example: `import { x } from "./foo.js";` → `import { x } from "./foo";` only when that package/file convention is extensionless.
 
@@ -45,7 +45,6 @@ Upstream uses different package scopes. Replace them consistently.
 - Examples (adjust to match the actual packages you are porting):
   - `@mariozechner/pi-coding-agent` → `@oh-my-pi/pi-coding-agent`
   - `@mariozechner/pi-agent-core` → `@oh-my-pi/pi-agent-core`
-  - `@mariozechner/pi-tui` → `@oh-my-pi/pi-tui`
   - `@mariozechner/pi-ai` → `@oh-my-pi/pi-ai`
   - `@mariozechner/pi-utils` → `@oh-my-pi/pi-utils`
   - `@mariozechner/pi-catalog` → `@oh-my-pi/pi-catalog`
@@ -281,12 +280,6 @@ packages/ai:
 - fix: add overflow detection for Bedrock, MiniMax, Kimi providers
 - fix: 429 status is rate limiting, not context overflow
 
-packages/tui:
-- fix: refactored autocomplete state tracking
-- fix: file autocomplete should not trigger on empty text
-- fix: configurable autocomplete max visible items
-- fix: improved table column width calculation with word-aware wrapping
-
 packages/coding-agent:
 - fix: preserve external config.yml edits on save (#1046 by @nicobailonMD)
 - fix: resolve macOS NFD and curly quote variants in file paths
@@ -303,24 +296,9 @@ packages/coding-agent:
 
 Our fork has architectural decisions that differ from upstream. **Do not port these upstream patterns:**
 
-### UI Architecture
+### Host interaction boundary
 
-| Upstream                                    | Our Fork                                                            | Reason                                                                                                                                         |
-| ------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FooterDataProvider` class                  | `StatusLineComponent`                                               | Simpler, integrated status line                                                                                                                |
-| `ctx.ui.setHeader()` / `ctx.ui.setFooter()` | No-op stubs in current extension contexts                           | Not currently wired to replace the TUI status/header UI                                                                                        |
-| `ctx.ui.setEditorComponent()`               | Wired in interactive mode; no-op stubs in ACP/RPC/headless contexts | Custom editor replacement works in the interactive TUI; non-TUI runtimes keep stubs                                                            |
-| `ctx.ui.addAutocompleteProvider()`          | Wired in interactive mode; no-op stubs in ACP/RPC/headless contexts | Factory wrapping matches upstream; omp's editor has no custom `triggerCharacters`, so wrapped providers surface at the built-in trigger points |
-| `InteractiveModeOptions` options object     | Positional constructor args (options type still exported)           | Keep constructor signature; update the type when upstream adds fields                                                                          |
-
-### Component Naming
-
-| Upstream                     | Our Fork                |
-| ---------------------------- | ----------------------- |
-| `extension-input.ts`         | `hook-input.ts`         |
-| `extension-selector.ts`      | `hook-selector.ts`      |
-| `ExtensionInputComponent`    | `HookInputComponent`    |
-| `ExtensionSelectorComponent` | `HookSelectorComponent` |
+The fork is a headless Agent Runtime. Do not port terminal renderers, component toolkits, selectors, status/header implementations, keyboard dispatch, or theme registries. Keep the structural `ctx.ui` compatibility contract and ACP/RPC host bridges so existing extensions can load and hosts can project supported prompts and notifications.
 
 ### API Naming
 
@@ -372,7 +350,7 @@ Our fork has architectural decisions that differ from upstream. **Do not port th
 
 When porting, **skip** these files/features entirely:
 
-- `footer-data-provider.ts` — we use StatusLineComponent
+- terminal UI, CLI command, setup wizard, and renderer modules
 - `clipboard-image.ts` — image clipboard support is exposed through `src/utils/clipboard.ts` backed by `@oh-my-pi/pi-natives`
 - GitHub workflow files — we have our own CI
 - `models.generated.ts` — auto-generated, regenerate locally (as models.json instead)
@@ -381,7 +359,7 @@ When porting, **skip** these files/features entirely:
 
 These exist in our fork but not upstream. **Never overwrite:**
 
-- `StatusLineComponent` in interactive mode
+- Headless RPC/ACP/SDK host surfaces
 - Multi-credential auth with session affinity
 - Capability-based discovery system (`defineCapability`, `registerProvider`, `loadCapability`, `skillCapability`, etc.)
 - MCP/Exa/SSH integrations

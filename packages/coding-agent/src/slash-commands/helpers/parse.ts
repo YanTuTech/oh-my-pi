@@ -1,4 +1,4 @@
-import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../types";
+import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../runtime-types";
 
 export interface ParsedSubcommand {
 	verb: string;

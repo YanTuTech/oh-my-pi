@@ -29,7 +29,6 @@ import {
 } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
 import { StrictWorkspaceMentionReader } from "@oh-my-pi/pi-natives";
-import type { Component } from "@oh-my-pi/pi-tui";
 import {
 	$env,
 	$flag,
@@ -82,6 +81,7 @@ import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
 import { initializeWithSettings } from "./discovery";
 import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
+import { EditTool } from "./edit";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeVmContextsByOwner } from "./eval/js/context-manager";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
@@ -119,6 +119,7 @@ import {
 import { type FileSlashCommand, loadSlashCommands as loadSlashCommandsInternal } from "./extensibility/slash-commands";
 import type { HindsightSessionState } from "./hindsight/state";
 import { LocalProtocolHandler, type LocalProtocolOptions } from "./internal-urls";
+import { discoverStartupLspServers, type LspStartupServerInfo, warmupLspServers } from "./lsp";
 import { setSharedLspEnabled } from "./lsp/client";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "./lsp/startup-events";
 import {
@@ -196,45 +197,41 @@ import {
 	shouldDisableReasoning,
 	toReasoningEffort,
 } from "./thinking";
-import {
-	BashTool,
-	BUILTIN_TOOLS,
-	createTools,
-	createVibeTools,
-	type DeferredDiagnosticsEntry,
-	defaultLoadModeForToolName,
-	discoverStartupLspServers,
-	EditTool,
-	EvalTool,
-	GlobTool,
-	GrepTool,
-	getSearchTools,
-	HIDDEN_TOOLS,
-	isMountableUnderXdev,
-	type LspStartupServerInfo,
-	listXdevTools,
-	ReadTool,
-	releaseComputerSessionsForOwner,
-	resolveMountedXdevExecutable,
-	supportsExternalThinking,
-	type Tool,
-	type ToolSession,
-	WebSearchTool,
-	WriteTool,
-	warmupLspServers,
-	xdevDocsAll,
-	xdevEntries,
-} from "./tools";
+import { BashTool } from "./tools/bash";
 import { isMCPToolName, normalizeToolNames } from "./tools/builtin-names";
+import { releaseComputerSessionsForOwner } from "./tools/computer/supervisor";
 import { ToolContextStore } from "./tools/context";
+import { defaultLoadModeForToolName } from "./tools/essential-tools";
+import { EvalTool } from "./tools/eval";
+import { GlobTool } from "./tools/glob";
+import { GrepTool } from "./tools/grep";
 import { isIrcEnabled } from "./tools/hub";
 import { getImageGenTools } from "./tools/image-gen";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
 import { isFilesystemSourcePath } from "./tools/path-utils";
+import { ReadTool } from "./tools/read";
 import { isAutoQaEnabled } from "./tools/report-tool-issue";
 import { queueResolveHandler } from "./tools/resolve";
+import {
+	BUILTIN_TOOLS,
+	createTools,
+	type DeferredDiagnosticsEntry,
+	HIDDEN_TOOLS,
+	type Tool,
+	type ToolSession,
+} from "./tools/runtime";
+import { supportsExternalThinking } from "./tools/think";
 import { USER_TODO_EDIT_CUSTOM_TYPE } from "./tools/todo";
 import { ttsTool } from "./tools/tts";
+import { createVibeTools } from "./tools/vibe";
+import { WriteTool } from "./tools/write";
+import {
+	isMountableUnderXdev,
+	listXdevTools,
+	resolveMountedXdevExecutable,
+	xdevDocsAll,
+	xdevEntries,
+} from "./tools/xdev";
 import { resolveActiveRepoContext } from "./utils/active-repo-context";
 import { EventBus } from "./utils/event-bus";
 import { normalizeProviderContextImagesForModel } from "./utils/image-loading";
@@ -242,6 +239,7 @@ import { formatLocalCalendarDate } from "./utils/local-date";
 import { normalizePromptPath } from "./utils/prompt-path";
 import { buildNamedToolChoice } from "./utils/tool-choice";
 import { VibeSessionRegistry } from "./vibe/runtime";
+import { getSearchTools, WebSearchTool } from "./web/search";
 import { buildWorkspaceTree, type WorkspaceTree } from "./workspace-tree";
 
 type McpNotificationEntry = {
@@ -590,12 +588,12 @@ export interface CreateAgentSessionOptions {
 	 */
 	settingsManager?: Settings | Promise<Settings>;
 
-	/** Whether UI is available (enables interactive tools like ask). Default: false */
+	/** Whether a host interaction channel is available (enables tools like ask). Default: false */
 	hasUI?: boolean;
 	/**
-	 * A human can answer synchronous prompts even without a terminal UI (e.g. an
+	 * A human can answer synchronous prompts through a host channel (e.g. an
 	 * ACP client rendering elicitation forms). Enables `ask` without enabling
-	 * TUI-only session behavior such as eager LSP warmup. Default: `hasUI`.
+	 * legacy interactive-session behavior such as eager LSP warmup. Default: `hasUI`.
 	 */
 	interactivePrompts?: boolean;
 	/**
@@ -679,7 +677,7 @@ export type { MCPManager, MCPServerConfig, MCPServerConnection, MCPToolsLoadResu
 // embedding several concurrent top-level sessions in one process (the default
 // global registry admits only one "Main" per process generation).
 export { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
-export type { Tool } from "./tools";
+export type { Tool } from "./tools/runtime";
 export { buildDirectoryTree, buildWorkspaceTree, type DirectoryTree, type WorkspaceTree } from "./workspace-tree";
 
 export {
@@ -977,6 +975,7 @@ function registerEvalCleanup(): void {
 }
 
 export function customToolToDefinition(tool: CustomTool, sourcePath?: string): ToolDefinition {
+	const renderResult = tool.renderResult;
 	const definition: ToolDefinition & { [TOOL_DEFINITION_MARKER]: true } = {
 		name: tool.name,
 		label: tool.label,
@@ -997,16 +996,8 @@ export function customToolToDefinition(tool: CustomTool, sourcePath?: string): T
 			tool.execute(toolCallId, params, onUpdate, createCustomToolContext(ctx), signal),
 		onSession: tool.onSession ? (event, ctx) => tool.onSession?.(event, createCustomToolContext(ctx)) : undefined,
 		renderCall: tool.renderCall,
-		renderResult: tool.renderResult
-			? (result, options, theme): Component => {
-					const component = tool.renderResult?.(
-						result,
-						{ expanded: options.expanded, isPartial: options.isPartial, spinnerFrame: options.spinnerFrame },
-						theme,
-					);
-					// Return empty component if undefined to match Component type requirement
-					return component ?? ({ render: () => [] } as unknown as Component);
-				}
+		renderResult: renderResult
+			? (result, options, theme, args) => renderResult(result, options, theme, args)
 			: undefined,
 		[TOOL_DEFINITION_MARKER]: true,
 	};
@@ -3896,10 +3887,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 
 		// Start LSP warmup in the background so startup does not block on language server initialization.
 		// With `lsp.lazy` (the default) the warmup is skipped: recognized servers are still discovered and
-		// surfaced in the UI as "available", but cold-start on first use — the lsp tool or an edit/write
+		// surfaced to interactive hosts as "available", but cold-start on first use — the lsp tool or an edit/write
 		// touching a matching file type — through `getOrCreateClient`.
-		// Print/script invocations (`hasUI=false`) skip it regardless: they don't render the warmup status
-		// indicator AND typically finish before LSP servers would have stabilized — warming them just spends
+		// Headless invocations (`hasUI=false`) skip it regardless: they typically finish before LSP servers
+		// would have stabilized, so warming them only spends
 		// CPU parsing big `initialize` responses concurrently with the LLM stream consumer, jittering
 		// perceived latency.
 		let lspServers: CreateAgentSessionResult["lspServers"];

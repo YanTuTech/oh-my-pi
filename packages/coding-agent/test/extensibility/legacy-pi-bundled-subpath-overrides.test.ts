@@ -161,17 +161,11 @@ export const observed = [
 		const overrides = __buildLegacyPiPackageRootOverrides(true, bundledModuleKeys);
 		const missing: string[] = [];
 		for (const key of bundledModuleKeys) {
-			// pi-ai/pi-coding-agent/pi-tui roots intentionally use the legacy compat
+			// pi-ai/pi-coding-agent roots intentionally use the legacy compat
 			// shims (they re-attach `Type`, `defineTool`, `decodeKittyPrintable`, etc.
 			// dropped from the canonical package surfaces); typebox is served via
 			// TYPEBOX_SHIM_PATH.
-			if (
-				key === "@oh-my-pi/pi-ai" ||
-				key === "@oh-my-pi/pi-coding-agent" ||
-				key === "@oh-my-pi/pi-tui" ||
-				key === "typebox"
-			)
-				continue;
+			if (key === "@oh-my-pi/pi-ai" || key === "@oh-my-pi/pi-coding-agent" || key === "typebox") continue;
 			if (overrides[key] !== `omp-legacy-pi-bundled:${key}`) {
 				missing.push(key);
 			}
@@ -179,7 +173,7 @@ export const observed = [
 		expect(missing).toEqual([]);
 	});
 
-	it("keeps pi-ai/pi-coding-agent/pi-tui roots routed to their compat shims in compiled mode", () => {
+	it("keeps pi-ai/pi-coding-agent roots routed to their compat shims in compiled mode", () => {
 		// The shim entries themselves resolve to virtual bundled specifiers in
 		// compiled mode (the shim files are bundled under their own registry
 		// keys); the test asserts only that the roots stay distinct from the
@@ -189,7 +183,6 @@ export const observed = [
 		expect(overrides["@oh-my-pi/pi-ai"]).toBeDefined();
 		expect(overrides["@oh-my-pi/pi-ai"]).not.toBe("omp-legacy-pi-bundled:@oh-my-pi/pi-ai/oauth");
 		expect(overrides["@oh-my-pi/pi-coding-agent"]).toBeDefined();
-		expect(overrides["@oh-my-pi/pi-tui"]).toBeDefined();
 	});
 
 	it("does not register subpath overrides in dev/install mode", () => {

@@ -1,5 +1,5 @@
-import { computeContextBreakdown } from "../../modes/utils/context-usage";
-import type { SlashCommandRuntime } from "../types";
+import { computeContextBreakdown } from "../../session/context-usage";
+import type { SlashCommandRuntime } from "../runtime-types";
 import { renderAsciiBar } from "./format";
 
 /**

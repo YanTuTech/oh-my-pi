@@ -1,8 +1,7 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
-import { KeybindingsManager, setKeyHintPlatform } from "@oh-my-pi/pi-coding-agent/config/keybindings";
-import { getThemeByName, initTheme, type Theme, theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { runtimeTheme } from "@oh-my-pi/pi-coding-agent/extensibility/ui-contract";
 import {
 	dedupeParseErrors,
 	expandKeyHint,
@@ -15,7 +14,8 @@ import {
 	shortenPath,
 	truncateDiffByHunk,
 } from "@oh-my-pi/pi-coding-agent/tools/render-utils";
-import { getKeybindings, setKeybindings, type KeybindingsManager as TuiKeybindingsManager } from "@oh-my-pi/pi-tui";
+
+const plainTheme = { ...runtimeTheme, format: { bracketLeft: "[", bracketRight: "]" } };
 
 describe("parse error formatting", () => {
 	it("deduplicates parse errors while preserving order", () => {
@@ -187,10 +187,7 @@ describe("formatScreenshot", () => {
 });
 
 describe("formatDiagnostics", () => {
-	it("replaces tabs in rendered diagnostic text", async () => {
-		const theme = await getThemeByName("dark");
-		expect(theme).toBeDefined();
-
+	it("replaces tabs in rendered diagnostic text", () => {
 		const formatted = formatDiagnostics(
 			{
 				errored: true,
@@ -201,7 +198,7 @@ describe("formatDiagnostics", () => {
 				],
 			},
 			true,
-			theme!,
+			runtimeTheme,
 			() => "go",
 		);
 
@@ -358,17 +355,14 @@ describe("truncateDiffByHunk", () => {
 });
 
 describe("formatErrorMessage (F4 sanitization)", () => {
-	beforeAll(async () => {
-		await initTheme();
-	});
 	it("replaces tabs in error content with spaces", () => {
-		const out = formatErrorMessage("apply_patch failed:\n@@\n-old\tindented\n+new", theme);
+		const out = formatErrorMessage("apply_patch failed:\n@@\n-old\tindented\n+new", runtimeTheme);
 		expect(out).not.toContain("\t");
 	});
 
 	it("truncates very long error messages to keep TUI from overflowing", () => {
 		const longTail = "x".repeat(500);
-		const out = formatErrorMessage(`crash: ${longTail}`, theme);
+		const out = formatErrorMessage(`crash: ${longTail}`, runtimeTheme);
 		// Strip ANSI escape sequences so we can measure the user-visible length.
 		const ESC = String.fromCharCode(0x1b);
 		const visible = out
@@ -381,44 +375,18 @@ describe("formatErrorMessage (F4 sanitization)", () => {
 	});
 
 	it("falls back to 'Unknown error' for empty/missing input", () => {
-		const out = formatErrorMessage(undefined, theme);
+		const out = formatErrorMessage(undefined, runtimeTheme);
 		expect(out).toContain("Unknown error");
 	});
 });
 
 describe("formatExpandHint / expandKeyHint", () => {
-	// Plain stub: `fg` is a passthrough and brackets are literal `[`/`]`, so the
-	// rendered hint is deterministic regardless of the active theme's bracket glyphs.
-	const plainTheme = {
-		fg: (_color: unknown, text: string) => text,
-		format: { bracketLeft: "[", bracketRight: "]" },
-	} as unknown as Theme;
-
-	let previous: TuiKeybindingsManager;
-	beforeEach(() => {
-		previous = getKeybindings();
-		setKeyHintPlatform("linux");
-	});
-	afterEach(() => {
-		setKeybindings(previous);
-		setKeyHintPlatform(undefined);
-	});
-
 	it("reports the default tool-output expand key", () => {
-		setKeybindings(KeybindingsManager.inMemory());
 		expect(expandKeyHint()).toBe("Ctrl+O");
-		// Single bracket pair from the theme, no double-wrapping around the key.
 		expect(formatExpandHint(plainTheme, false, true)).toBe("[Ctrl+O: Expand]");
 	});
 
-	it("tracks a user remap of the expand binding", () => {
-		setKeybindings(KeybindingsManager.inMemory({ "app.tools.expand": "alt+e" }));
-		expect(expandKeyHint()).toBe("Alt+E");
-		expect(formatExpandHint(plainTheme, false, true)).toBe("[Alt+E: Expand]");
-	});
-
 	it("renders nothing when expanded or there is no more content", () => {
-		setKeybindings(KeybindingsManager.inMemory());
 		expect(formatExpandHint(plainTheme, true, true)).toBe("");
 		expect(formatExpandHint(plainTheme, false, false)).toBe("");
 	});

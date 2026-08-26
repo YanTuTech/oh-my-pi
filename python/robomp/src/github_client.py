@@ -530,7 +530,7 @@ class GitHubClient:
         """List recent issues for `repo`, newest-updated first. Excludes pull requests.
 
         `state` is one of `open`, `closed`, `all`. `limit` is capped at 100 by the
-        GitHub `per_page`; we don't paginate here — the dashboard browse view shows
+        GitHub `per_page`; we don't paginate here — the status browse API shows
         a recent slice, not every issue ever.
         """
         if state not in ("open", "closed", "all"):

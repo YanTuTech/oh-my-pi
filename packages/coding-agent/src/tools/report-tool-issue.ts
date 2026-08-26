@@ -15,7 +15,7 @@
  *
  * Nothing is written until consent resolves. If the user has never been asked
  * (`dev.autoqaConsent === "unset"`) the process-global consent handler —
- * wired by `InteractiveMode` to a Yes/No popup — is invoked exactly once and
+ * registered by the embedding host — is invoked exactly once and
  * the decision is persisted; a denial (or dismissal) drops the pending report
  * without touching the database. Subsequent calls (including from subagents)
  * read the cached decision without prompting. `PI_AUTO_QA_PUSH=1` bypasses
@@ -33,14 +33,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { FetchImpl } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
-import { Text } from "@oh-my-pi/pi-tui";
 import { $env, $flag, getAutoQaDbPath, getInstallId, logger, VERSION } from "@oh-my-pi/pi-utils";
-import type { Settings } from "..";
-import type { Theme } from "../modes/theme/theme";
-import { renderStatusLine, truncateToWidth } from "../tui";
-import type { ToolSession } from "./index";
-import { replaceTabs } from "./render-utils";
+import type { Settings } from "../config/settings";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 import type { XdevDispatch } from "./xdev";
 
@@ -59,20 +54,6 @@ export function isReportIssueToolCall(toolCall: { name: string; arguments?: Reco
 	const path =
 		typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : undefined;
 	return path === REPORT_ISSUE_DEVICE_PATH || path === `${REPORT_ISSUE_DEVICE_PATH}/`;
-}
-
-/** Call preview for an `xd://report_issue` write. */
-export function renderReportIssueDeviceCall(content: unknown, uiTheme: Theme): Component {
-	const body = typeof content === "string" ? replaceTabs(content.trim().split("\n")[0] ?? "") : "";
-	const text = renderStatusLine(
-		{
-			icon: "pending",
-			title: "Report Tool Issue",
-			description: body ? truncateToWidth(body, 72) : undefined,
-		},
-		uiTheme,
-	);
-	return new Text(text, 0, 0);
 }
 
 function parseReportIssueBody(text: string): { tool: string; report: string } {
@@ -130,9 +111,8 @@ export function isAutoQaEnabled(settings?: Settings): boolean {
  *
  * Persistence is the tool's job (so subagent invocations can persist into the
  * disk-backed `Settings` instance the host registered alongside the handler),
- * not the handler's. Implementations live in hosts that have UI affordances —
- * today only `InteractiveMode`. When no handler is registered (CLI subcommands,
- * tests, non-interactive runs) consent defaults to `false` — the explicit
+ * not the handler's. When no handler is registered (tests or non-interactive
+ * runs), consent defaults to `false` — the explicit
  * "don't collect by default" stance.
  */
 export type AutoQaConsentHandler = () => Promise<boolean | null>;
@@ -165,7 +145,7 @@ let consentInFlight: Promise<boolean> | null = null;
 /**
  * Register the consent handler and the persistent {@link Settings} instance
  * the decision should be written to. Passing `null` clears the handler
- * (e.g. on `InteractiveMode` teardown). Re-registration is authoritative.
+ * (e.g. on host teardown). Re-registration is authoritative.
  */
 export function setAutoQaConsentHandler(
 	handler: AutoQaConsentHandler | null,

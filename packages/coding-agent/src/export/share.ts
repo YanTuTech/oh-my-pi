@@ -29,7 +29,7 @@ import type { SecretObfuscator } from "../secrets/obfuscator";
 import { type SessionEntry, type SessionHeader, TITLE_CHANGE_ENTRY_TYPE } from "../session/session-entries";
 import type { SessionManager } from "../session/session-manager";
 import type { OutputMeta } from "../tools/output-meta";
-import { buildSessionData, type SessionData, type SubSession } from "./html";
+import { buildSessionData, type SessionData, type SubSession } from "./session-data";
 
 export { DEFAULT_SHARE_URL };
 

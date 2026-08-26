@@ -13,7 +13,7 @@ import type { SecurityOperationSnapshot } from "../security/coordinator";
 import { getSecurityCoordinator } from "../security/coordinator";
 import type { SecurityTargetRequest } from "../security/preflight";
 import { SecurityStore } from "../security/store";
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 const securityScanSchema = type({

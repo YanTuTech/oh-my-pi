@@ -1,6 +1,5 @@
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import * as git from "../utils/git";
-import type { ToolSession } from ".";
 import type { GhToolDetails } from "./gh";
 import {
 	buildTextResult,
@@ -30,6 +29,7 @@ import type {
 	GhUser,
 	GithubInput,
 } from "./gh-types";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 export const SEARCH_LIMIT_DEFAULT = 10;

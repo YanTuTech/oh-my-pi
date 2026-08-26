@@ -3,7 +3,7 @@
  *
  * The MV3 extension can only dial OUT (service workers cannot listen on
  * sockets), so a native process must own the relay port. Instead of making
- * the user run `omp browser-relay` by hand, the relay kind lazily starts one
+ * requiring a separate user command, the relay kind lazily starts one
  * under a profile-independent, machine-global daemon broker. Every relay
  * consumer holds a connection to that broker, so one project exiting cannot
  * tear down the fixed-port singleton while another project still uses it.
@@ -18,11 +18,12 @@ import { describeQuietly, stopQuietly, waitReady } from "../../../launch/ensure"
 import { resolveWorkerSpawnCmd } from "../../../subprocess/worker-client";
 import { throwIfAborted } from "../../tool-errors";
 import { probeCdpStatus } from "../attach";
+import { BROWSER_RELAY_WORKER_ARG } from "./protocol";
 
 /** Stable broker daemon name for the relay server. */
 export const RELAY_DAEMON_NAME = "omp.browser.relay";
 const RELAY_BROKER_SCOPE = "browser-relay";
-/** Matches the serve banner (`omp browser relay listening on http://…`). */
+/** Matches the Runtime worker's relay-ready banner. */
 const READY_LOG_PATTERN = String.raw`browser relay listening on http://\S+`;
 const READY_TIMEOUT_MS = 15_000;
 const PROBE_TIMEOUT_MS = 1_500;
@@ -64,7 +65,7 @@ export async function ensureRelayDaemon(opts: { cdpUrl: string; signal?: AbortSi
 	throwIfAborted(opts.signal);
 	await client.request({ op: "ping" }, opts.signal);
 	if (await probeRelayServer(opts.cdpUrl)) return true;
-	const spawn = resolveWorkerSpawnCmd("browser-relay");
+	const spawn = resolveWorkerSpawnCmd(BROWSER_RELAY_WORKER_ARG);
 	for (let attempt = 0; attempt < ENSURE_ATTEMPTS; attempt++) {
 		throwIfAborted(opts.signal);
 		// A manual serve or concurrent global-broker start may have won the

@@ -58,10 +58,10 @@ Literal filesystem paths take precedence over selector interpretation, so an exi
   - `suffixResolution`
   - URL fields: `url`, `finalUrl`, `contentType`, `method`, `notes`
   - `truncation`
-  - `displayContent` (unprefixed text + starting line for TUI rendering)
+  - `displayContent` (unprefixed text + starting line for host presentation)
   - `summary` (`lines`, `elidedSpans`, `elidedLines`) for structural summaries
   - `conflictCount` for `<path>:conflicts`
-  - `displayReadTargets` when the tool recovered an accidental delimited list of paths for TUI display
+  - `displayReadTargets` when the tool recovered an accidental delimited list of paths for host presentation
   - `meta` from `packages/coding-agent/src/tools/output-meta.ts`
 - `details.meta.source` is set to the backing path, URL, or internal URL.
 - `details.meta.truncation` carries shown range, total lines/bytes, next offset, and optional `artifactId` for cached URL output.

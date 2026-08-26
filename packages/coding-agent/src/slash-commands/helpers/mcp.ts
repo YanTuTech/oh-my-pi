@@ -14,7 +14,7 @@ import { getSmitheryApiKey } from "../../mcp/smithery-auth";
 import { searchSmitheryRegistry } from "../../mcp/smithery-registry";
 import type { MCPServerConfig, MCPServerConnection } from "../../mcp/types";
 import { parseCommandArgs } from "../../utils/command-args";
-import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../types";
+import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../runtime-types";
 import { commandConsumed, errorMessage, parseNamedScopeArgs, parseSubcommand, usage } from "./parse";
 
 type AcpMcpScope = "user" | "project";
@@ -353,7 +353,7 @@ async function handleSmitherySearchCommand(rest: string, runtime: SlashCommandRu
 		const message = errorMessage(err);
 		if (AIError.is(AIError.classify(err), AIError.Flag.AuthFailed)) {
 			return usage(
-				"Smithery authentication required. Run /mcp smithery-login in the TUI client or add an API key to ~/.omp/agent/smithery.json.",
+				"Smithery authentication required. Run /mcp smithery-login in an interactive host or add an API key to ~/.omp/agent/smithery.json.",
 				runtime,
 			);
 		}
@@ -483,7 +483,7 @@ const MCP_HELP_TEXT = [
 	"  /mcp help                                               Show this help",
 ].join("\n");
 
-const TUI_ONLY_MCP_VERBS = new Set(["reauth", "unauth", "smithery-login", "smithery-logout", "reconnect"]);
+const INTERACTIVE_HOST_MCP_VERBS = new Set(["reauth", "unauth", "smithery-login", "smithery-logout", "reconnect"]);
 
 /** ACP/text-mode `/mcp` handler. Shared by both dispatchers via the spec. */
 export async function handleMcpAcp(
@@ -497,12 +497,12 @@ export async function handleMcpAcp(
 	}
 	if (verb === "notifications") {
 		return usage(
-			"MCP notifications require the TUI client (live MCPManager). Use /mcp list to see server status.",
+			"MCP notifications require an interactive host with a live MCPManager. Use /mcp list to see server status.",
 			runtime,
 		);
 	}
-	if (TUI_ONLY_MCP_VERBS.has(verb)) {
-		return usage(`/mcp ${verb} requires OAuth or browser flows only available in the TUI client.`, runtime);
+	if (INTERACTIVE_HOST_MCP_VERBS.has(verb)) {
+		return usage(`/mcp ${verb} requires OAuth or browser flows supplied by an interactive host.`, runtime);
 	}
 	switch (verb) {
 		case "resources":

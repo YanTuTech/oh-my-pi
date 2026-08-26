@@ -26,7 +26,7 @@ import {
 	RemoteAuthCredentialStore,
 	startAuthBroker,
 } from "@oh-my-pi/pi-ai/auth-broker";
-import { refreshBrokerOAuthCredential } from "@oh-my-pi/pi-coding-agent/cli/auth-broker-cli";
+import { refreshBrokerOAuthCredential } from "@oh-my-pi/pi-coding-agent/mcp/broker-oauth-refresh";
 import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
 import { mcpOAuthCredentialId } from "@oh-my-pi/pi-coding-agent/mcp/oauth-flow";
 import type { MCPServerConfig } from "@oh-my-pi/pi-coding-agent/mcp/types";

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
-import { SelectorController } from "@oh-my-pi/pi-coding-agent/modes/controllers/selector-controller";
+import { applyProviderGlobalsFromSettings } from "@oh-my-pi/pi-coding-agent/config/provider-globals";
 import {
 	resolveProviderCandidates,
 	resolveProviderChain,
@@ -75,9 +75,9 @@ describe("resolveProviderCandidates", () => {
 	});
 
 	it("applies live settings edits, filtering invalid and duplicate provider IDs", () => {
-		const controller = new SelectorController({} as unknown as ConstructorParameters<typeof SelectorController>[0]);
-
-		controller.handleSettingChange("providers.webSearchOrder", ["exa", "not-a-provider", "exa", "gemini"]);
+		applyProviderGlobalsFromSettings({
+			get: key => (key === "providers.webSearchOrder" ? ["exa", "not-a-provider", "exa", "gemini"] : []),
+		});
 
 		const candidates = resolveProviderCandidates();
 		expect(candidates.slice(0, 2).map(candidate => candidate.id)).toEqual(["exa", "gemini"]);
@@ -106,12 +106,9 @@ describe("resolveProviderChain", () => {
 
 	it("applies live settings edits to the exclusion chain", async () => {
 		enableKeyBackedProviders();
-		const controller = new SelectorController({} as unknown as ConstructorParameters<typeof SelectorController>[0]);
-
-		controller.handleSettingChange(
-			"providers.webSearchExclude",
-			SEARCH_PROVIDER_ORDER.filter(id => id !== "jina"),
-		);
+		applyProviderGlobalsFromSettings({
+			get: key => (key === "providers.webSearchExclude" ? SEARCH_PROVIDER_ORDER.filter(id => id !== "jina") : []),
+		});
 
 		const providers = await resolveProviderChain(authStorage);
 

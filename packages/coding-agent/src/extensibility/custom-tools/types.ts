@@ -18,7 +18,6 @@ import type {
 } from "@oh-my-pi/pi-agent-core";
 import type { CompactionResult } from "@oh-my-pi/pi-agent-core/compaction";
 import type { FetchImpl, Model, Static, TSchema } from "@oh-my-pi/pi-ai";
-import type { Component } from "@oh-my-pi/pi-tui";
 import type { logger as PiLogger } from "@oh-my-pi/pi-utils";
 import type { Rule } from "../../capability/rule";
 import type { ModelRegistry } from "../../config/model-registry";
@@ -27,10 +26,10 @@ import type { ExecOptions, ExecResult } from "../../exec/exec";
 import type { HookUIContext } from "../../extensibility/hooks/types";
 import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
-import type { Theme } from "../../modes/theme/theme";
 import type { ReadonlySessionManager } from "../../session/session-manager";
 import type { TodoItem } from "../../tools/todo";
 import type { RetryErrorUpdate } from "../shared-events";
+import type { Component, Theme } from "../ui-contract";
 
 /** Alias for clarity */
 export type CustomToolUIContext = HookUIContext;
@@ -252,10 +251,11 @@ export interface CustomTool<TParams extends TSchema = TSchema, TDetails = any> {
 
 	/** Called on session lifecycle events - use to reconstruct state or cleanup resources */
 	onSession?: (event: CustomToolSessionEvent, ctx: CustomToolContext) => void | Promise<void>;
-	/** Custom rendering for tool call display - return a Component */
+
+	/** Optional host-renderer hook for the tool call. */
 	renderCall?: (args: Static<TParams>, options: RenderResultOptions, theme: Theme) => Component;
 
-	/** Custom rendering for tool result display - return a Component */
+	/** Optional host-renderer hook for the tool result. */
 	renderResult?: (
 		result: CustomToolResult<TDetails>,
 		options: RenderResultOptions,

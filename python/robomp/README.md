@@ -1,6 +1,6 @@
 # roboomp
 
-Self-hosted GitHub triage bot. Drives [`omp --mode rpc`](https://github.com/can1357/oh-my-pi)
+Self-hosted GitHub triage bot. Drives the headless Agent Runtime RPC host
 as a subprocess against a per-issue git worktree, then writes back to GitHub
 through a sidecar that holds the PAT.
 
@@ -17,7 +17,7 @@ and branches:
 - `enhancement` / `proposal` → one comment, no PR.
 - `invalid` / `duplicate` → one brief comment.
 
-Follow-up issue comments and PR review comments resume the same omp session
+Follow-up issue comments and PR review comments resume the same Runtime session
 (`--continue` against the persisted JSONL transcript). On orchestrator
 restart, in-flight events are re-queued and resume the same way.
 
@@ -30,7 +30,7 @@ the next verdict until every run and the GitHub Release are green.
 
 Two containers, one trust boundary:
 
-- **robomp** — FastAPI + sqlite event queue + `WorkerPool` running `omp` in
+- **robomp** — FastAPI + sqlite event queue + `WorkerPool` running the Runtime host in
   per-issue worktrees under `/data/workspaces/`. Holds the HMAC key, never
   the PAT.
 - **gh-proxy** — sibling on an `internal: true` network. Holds `GITHUB_TOKEN`,
@@ -41,13 +41,13 @@ Flow: webhook → HMAC verify → `github_events.route` → sqlite `events`
 (dedup on `X-GitHub-Delivery`) → `WorkerPool` claims under
 `BEGIN IMMEDIATE` with an in-process `_inflight` set per `(owner, repo, n)`
 → `sandbox.ensure_workspace` produces a worktree on `farm/<8hex>/<slug>`
-→ `worker.run_task` spawns `omp --mode rpc` with `cwd=worktree`,
+→ `worker.run_task` spawns `omp-runtime-rpc-host --mode rpc` with `cwd=worktree`,
 persistent `session_dir`, model randomly drawn from `ROBOMP_MODEL` (CSV).
 
 Release events serialize under `<owner>/<repo>#release`; each tag persists its
 own `releases` row and `.omp-session-<tag>` transcript.
 
-The agent uses omp's built-in tools (`read`/`edit`/`bash`/`lsp`, scoped to
+The agent uses the Runtime's built-in tools (`read`/`edit`/`bash`/`lsp`, scoped to
 the worktree) plus the host tools in `src/host_tools.py` — the
 exclusive surface for GitHub writes. Every host-tool invocation is audited
 into the `tool_calls` table with credential-redacted args and results.
@@ -131,7 +131,7 @@ Durable states: `awaiting_ci`, `fixing`, `green`, `failed`, and `superseded`.
 `ROBOMP_RELEASE_TASK_TIMEOUT_SECONDS` controls each round. Optional
 `ROBOMP_RELEASE_MODEL` selects a release-only model or CSV pool and otherwise
 falls back to `ROBOMP_MODEL`. Terminal states are intentionally silent on
-GitHub: inspect the dashboard Releases table, `GET /releases?limit=N`, or
+GitHub: inspect `GET /releases?limit=N` or
 `robomp status`.
 
 ## CLI
@@ -157,8 +157,8 @@ pytest -x tests/                              # unit suite, no network
 ROBOMP_INTEGRATION=1 pytest -x tests/test_worker_smoke.py
 ```
 
-The integration test spawns a real `omp --mode rpc` against an
-`httpx.MockTransport` GitHub and a local bare repo, so it needs `omp` on
+The integration test spawns a real Runtime RPC host against an
+`httpx.MockTransport` GitHub and a local bare repo, so it needs `omp-runtime-rpc-host` on
 `PATH`. `bun run test:py` runs the unit suite.
 
 ## Security posture
@@ -216,7 +216,7 @@ The integration test spawns a real `omp --mode rpc` against an
   `/data/logs/robomp.log.jsonl`.
 - **Inspection** (localhost only): `GET /events?limit=N`,
   `GET /issues?limit=N`, `GET /releases?limit=N`, `GET /healthz`,
-  `GET /readyz`, and the dashboard at `/`.
+  `GET /readyz`.
 
 ## Troubleshooting
 
@@ -236,7 +236,7 @@ The integration test spawns a real `omp --mode rpc` against an
 
 ```
 src/
-  server.py          FastAPI app, webhook/status APIs including /releases, dashboard at /
+  server.py          Headless FastAPI app and webhook/status APIs including /releases
   github_events.py   verify_signature + route()
   queue.py           WorkerPool, dispatch loop, per-issue _inflight serialization
   tasks.py           issue/PR handlers plus handle_release_ci and cleanup_workspace
@@ -251,7 +251,6 @@ src/
   cli.py             serve / triage / replay / status / cleanup
   prompts/           system_append.md + per-task kickoff templates
 tests/               pytest unit suite + one ROBOMP_INTEGRATION=1 smoke test
-web/                 vite + solid dashboard, built into src/static/
 ```
 
 ## License

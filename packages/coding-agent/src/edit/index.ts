@@ -11,10 +11,11 @@ import { getDiagnosticsLedger } from "../lsp/diagnostics-ledger";
 import applyPatchDescription from "../prompts/tools/apply-patch.md" with { type: "text" };
 import patchDescription from "../prompts/tools/patch.md" with { type: "text" };
 import replaceDescription from "../prompts/tools/replace.md" with { type: "text" };
-import type { ToolSession } from "../tools";
 import { truncateForPrompt } from "../tools/approval";
+import { getLspBatchRequest, type LspBatchRequest } from "../tools/lsp-batch";
 import { findUniqueWorkspaceSuffix, isInternalUrlPath, resolveFileWriteApprovalTier } from "../tools/path-utils";
 import { resolvePlanPath } from "../tools/plan-mode-guard";
+import type { ToolSession } from "../tools/runtime";
 import { type EditMode, normalizeEditMode, resolveEditMode } from "../utils/edit-mode";
 import { attemptEditAutoRepair, type EditAutoRepairOutcome } from "./auto-repair";
 import {
@@ -23,12 +24,12 @@ import {
 	createEditBlackboxRecorder,
 	introducedParseFailure,
 } from "./blackbox";
+import type { EditToolDetails, EditToolPerFileResult } from "./details";
 import { executeHashlineSingle, hashlineEditParamsSchema } from "./hashline";
 import { type ApplyPatchParams, applyPatchSchema, expandApplyPatchToEntries } from "./modes/apply-patch";
 import applyPatchGrammar from "./modes/apply-patch.lark" with { type: "text" };
 import { executePatchSingle, type PatchEditEntry, type PatchParams, patchEditSchema } from "./modes/patch";
 import { executeReplace, type ReplaceBatchParams, type ReplaceParams, replaceEditSchema } from "./modes/replace";
-import { type EditToolDetails, type EditToolPerFileResult, getLspBatchRequest, type LspBatchRequest } from "./renderer";
 import {
 	createAggregateEditDetails,
 	createAggregateEditToolResult,
@@ -51,6 +52,7 @@ import { EDIT_MODE_STRATEGIES } from "./streaming";
 export * from "@oh-my-pi/hashline";
 export { DEFAULT_EDIT_MODE, type EditMode, normalizeEditMode } from "../utils/edit-mode";
 export * from "./apply-patch";
+export * from "./details";
 export * from "./diff";
 export * from "./file-snapshot-store";
 export * from "./hashline";
@@ -58,7 +60,6 @@ export * from "./modes/apply-patch";
 export * from "./modes/patch";
 export * from "./modes/replace";
 export * from "./normalize";
-export * from "./renderer";
 export * from "./result";
 export * from "./sloppy";
 export * from "./snapshot-details";

@@ -30,8 +30,8 @@ import {
 	MAX_IMAGE_INPUT_BYTES,
 	webpExclusionForModel,
 } from "../utils/image-loading";
-import type { ToolSession } from "./index";
 import { splitPathAndSelPreferringLiteral } from "./path-utils";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 const inspectImageSchema = type({
@@ -332,5 +332,3 @@ export class InspectImageTool implements AgentTool<typeof inspectImageSchema, In
 		};
 	}
 }
-
-export { inspectImageToolRenderer } from "./inspect-image-renderer";

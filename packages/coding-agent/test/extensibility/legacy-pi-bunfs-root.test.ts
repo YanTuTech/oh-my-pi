@@ -10,17 +10,18 @@ import { __computeBundledSelfPackageRoot } from "@oh-my-pi/pi-coding-agent/exten
 // path computation is dead and its regression tests (issues #1514, #3329)
 // retired alongside the code.
 //
-// The npm-prebuilt `dist/cli.js` self-package-root computation is still in
+// The emitted `dist/runtime` self-package-root computation is still in
 // use by `sourceShimPath` in installed-package mode, so its contract stays
 // pinned below.
 describe("legacy pi compat bundled-self package root computation", () => {
-	it("derives the npm prebuilt bundle package root from dist import.meta.dir", () => {
-		const winMetaDir = "C:\\Users\\me\\.bun\\install\\global\\node_modules\\@oh-my-pi\\pi-coding-agent\\dist";
+	it("derives the Runtime bundle package root from dist/runtime import.meta.dir", () => {
+		const winMetaDir =
+			"C:\\Users\\me\\.bun\\install\\global\\node_modules\\@oh-my-pi\\pi-coding-agent\\dist\\runtime";
 		expect(__computeBundledSelfPackageRoot(winMetaDir, path.win32)).toBe(
 			"C:\\Users\\me\\.bun\\install\\global\\node_modules\\@oh-my-pi\\pi-coding-agent",
 		);
 
-		const posixMetaDir = "/home/me/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist";
+		const posixMetaDir = "/home/me/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/runtime";
 		expect(__computeBundledSelfPackageRoot(posixMetaDir, path.posix)).toBe(
 			"/home/me/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent",
 		);

@@ -88,7 +88,7 @@ For a dispatch, set the agent name and task:
 
 ## Watch running agents
 
-After dispatch, press `Alt+A` to open [Agent Hub](./agent-hub.md). Its live roster shows each task agent's status, current activity, model, age, and usage. Select an agent to read its transcript and steer it directly; parked agents can be revived from the same view.
+After dispatch, Runtime host events expose each task agent's status, current activity, model, age, usage, and transcript. A host may project those events into its own roster and invoke the retained steer or revive operations.
 
 ### `vibe_spawn` tier routing
 

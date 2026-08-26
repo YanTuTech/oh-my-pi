@@ -24,13 +24,14 @@ import {
 } from "@oh-my-pi/hashline";
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { FileDiagnosticsResult, WritethroughCallback, WritethroughDeferredHandle } from "../../lsp";
-import type { ToolSession } from "../../tools";
+import type { LspBatchRequest } from "../../tools/lsp-batch";
+import type { ToolSession } from "../../tools/runtime";
 import { ToolError } from "../../tools/tool-errors";
 import type { AppliedEditObserver } from "../blackbox";
+import type { EditToolDetails, EditToolPerFileResult } from "../details";
 import { generateDiffString } from "../diff";
 import { getEditClipboard } from "../edit-clipboard";
 import { getFileSnapshotStore } from "../file-snapshot-store";
-import type { EditToolDetails, EditToolPerFileResult, LspBatchRequest } from "../renderer";
 import {
 	createAggregateEditDetails,
 	createAggregateEditToolResult,

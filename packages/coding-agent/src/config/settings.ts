@@ -36,13 +36,13 @@ import { invalidate as invalidateCapabilityFsCache } from "../capability/fs";
 import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
 import type { ModelRole } from "../config/model-roles";
 import { loadCapability } from "../discovery";
-import { isLightTheme, setAutoThemeMapping, setColorBlindMode, setSymbolPreset } from "../modes/theme/theme";
 import { AgentStorage } from "../session/agent-storage";
 import { type CompactionMethod, DEFAULT_COMPACTION_METHOD_ORDER } from "../session/compaction-methods";
 import { AUTO_IMAGE_PROVIDER_ORDER, isImageProviderId } from "../tools/image-providers";
 import { type EditMode, normalizeEditMode } from "../utils/edit-mode";
 import { INSPECT_IMAGE_MODES } from "../utils/inspect-image-mode";
 import { isSearchProviderId, SEARCH_PROVIDER_ORDER } from "../web/search/types";
+import { getAppearanceSettingsAdapter } from "./appearance-settings-adapter";
 import {
 	type BashInterceptorRule,
 	type GroupPrefix,
@@ -1539,7 +1539,7 @@ export class Settings {
 				delete raw.theme;
 			} else {
 				// Custom theme — detect luminance to place in correct slot
-				const slot = isLightTheme(oldTheme) ? "light" : "dark";
+				const slot = getAppearanceSettingsAdapter()?.isLightTheme(oldTheme) ? "light" : "dark";
 				raw.theme = { [slot]: oldTheme };
 			}
 		}
@@ -2531,26 +2531,30 @@ class SettingSignal<A extends unknown[] = []> {
 const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
 	"theme.dark": value => {
 		if (typeof value === "string") {
-			setAutoThemeMapping("dark", value);
+			getAppearanceSettingsAdapter()?.setAutoThemeMapping("dark", value);
 		}
 	},
 	"theme.light": value => {
 		if (typeof value === "string") {
-			setAutoThemeMapping("light", value);
+			getAppearanceSettingsAdapter()?.setAutoThemeMapping("light", value);
 		}
 	},
 	symbolPreset: value => {
 		if (typeof value === "string" && (value === "unicode" || value === "nerd" || value === "ascii")) {
-			setSymbolPreset(value).catch(err => {
-				logger.warn("Settings: symbolPreset hook failed", { preset: value, error: String(err) });
-			});
+			getAppearanceSettingsAdapter()
+				?.setSymbolPreset(value)
+				.catch(err => {
+					logger.warn("Settings: symbolPreset hook failed", { preset: value, error: String(err) });
+				});
 		}
 	},
 	colorBlindMode: value => {
 		if (typeof value === "boolean") {
-			setColorBlindMode(value).catch(err => {
-				logger.warn("Settings: colorBlindMode hook failed", { enabled: value, error: String(err) });
-			});
+			getAppearanceSettingsAdapter()
+				?.setColorBlindMode(value)
+				.catch(err => {
+					logger.warn("Settings: colorBlindMode hook failed", { enabled: value, error: String(err) });
+				});
 		}
 	},
 	"provider.appendOnlyContext": value => {

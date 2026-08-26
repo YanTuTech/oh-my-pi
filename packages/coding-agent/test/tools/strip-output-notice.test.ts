@@ -1,11 +1,11 @@
 /**
  * Round-trip contract between `appendOutputNotice` (via `formatOutputNotice`)
  * and `stripOutputNotice`: anything the tool wrapper bakes into the LLM-facing
- * content body, the TUI renderer must be able to peel off so the styled
- * `⟨…⟩` warning line doesn't double-print next to the verbatim body text.
+ * content body, a host must be able to peel off so a separately presented
+ * warning doesn't duplicate the verbatim body text.
  *
  * Regression: bash/eval/ssh/browser/read all printed the same `[Showing …]`
- * string twice — once from the body content, once as the styled warning line.
+ * string twice — once from the body content and once as a separate warning.
  */
 import { describe, expect, it } from "bun:test";
 import { formatOutputNotice, type OutputMeta, stripOutputNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";

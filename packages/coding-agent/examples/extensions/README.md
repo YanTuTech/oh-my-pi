@@ -5,11 +5,8 @@ Example extensions for pi-coding-agent.
 ## Usage
 
 ```bash
-# Load an extension with --extension flag
-pi --extension examples/extensions/permission-gate.ts
-
-# Or copy to extensions directory for auto-discovery
-cp permission-gate.ts ~/.omp/agent/extensions/
+# Pass an additional extension path through the SDK or protocol host.
+# runtime-rpc-host also accepts: --extension examples/extensions/hello.ts
 ```
 
 ## Examples
@@ -27,22 +24,16 @@ cp permission-gate.ts ~/.omp/agent/extensions/
 
 | Extension     | Description                                                                   |
 | ------------- | ----------------------------------------------------------------------------- |
-| `todo.ts`     | Todo list tool + `/todos` command with custom rendering and state persistence |
 | `hello.ts`    | Minimal custom tool example                                                   |
 | `question.ts` | Demonstrates `ctx.ui.select()` for asking the user questions                  |
 | `subagent/`   | Delegate tasks to specialized subagents with isolated context windows         |
 
-### Commands & UI
+### Commands and host interaction
 
 | Extension        | Description                                                                    |
 | ---------------- | ------------------------------------------------------------------------------ |
-| `plan-mode.ts`   | Claude Code-style plan mode for read-only exploration with `/plan` command     |
-| `tools.ts`       | Interactive `/tools` command to enable/disable tools with session persistence  |
-| `handoff.ts`     | Transfer context to a new focused session via `/handoff <goal>`                |
-| `qna.ts`         | Extracts questions from last response into editor via `ctx.ui.setEditorText()` |
-| `status-line.ts` | Shows turn progress in footer via `ctx.ui.setStatus()` with themed colors      |
-| `thinking-note.ts` | Adds display-only supplemental UI below assistant thinking blocks              |
-| `snake.ts`       | Snake game with custom UI, keyboard handling, and session persistence          |
+| `handoff.ts`     | Transfer context to a new focused Runtime session                              |
+| `qna.ts`         | Sends extracted questions through the host interaction contract                |
 
 ### Git Integration
 

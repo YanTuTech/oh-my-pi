@@ -1,26 +1,26 @@
 # @oh-my-pi/pi-metaharness
 
-One manager for repository benchmarks. Harbor, TypeScript edit, and SnapCompact
-runs use the same experiment → run → trace model, SQLite store, REST/SSE API,
-and dashboard. Benchmark-native artifacts remain on disk; adapters normalize
+One headless manager for repository benchmarks. Harbor, TypeScript edit, and SnapCompact
+runs use the same experiment → run → trace model, SQLite store, and REST/SSE API.
+Benchmark-native artifacts remain on disk; adapters normalize
 their live progress, scores, token usage, costs, and traces.
 
 ```bash
-# Dashboard + API on :4700; launch every benchmark from the same “new run” form
+# Headless API on :4700
 bun run serve --port 4700
 ```
 
 ## How Harbor runs execute
 
-1. **Local omp, not npm.** By default the runner bind-mounts the repo
-   read-only into each task container (`--install source`) and runs omp
-   straight from `packages/coding-agent/src/cli.ts` — TS edits apply to the
+1. **Local Runtime, not npm.** By default the runner bind-mounts the repo
+   read-only into each task container (`--install source`) and runs the RPC host
+   straight from `packages/coding-agent/src/runtime-rpc-host.ts` — TS edits apply to the
    next trial with no rebuild. A cached linux `node_modules` tree (built once
    per lockfile change inside `oven/bun`, stored in `<jobs-dir>/_bench/_deps/`)
    shadows the host's darwin one, and a linux `bun` binary is mounted at
    `/opt/omp/bin` — so trial setup needs zero outbound network. Alternatives:
-   `--install local` (pack a tarball per run) or `--binary` (prebuilt
-   `dist/omp-linux-*` self-contained binaries).
+   `--install local` (build and pack the Runtime bundle per run) or `--binary`
+   (a compatible self-contained Runtime RPC host).
 2. **Auth never enters containers.** A generated `models.yml` routes provider
    `baseUrl`s at the host pm2 auth-gateway; the gateway resolves credentials
    host-side.
@@ -29,7 +29,6 @@ bun run serve --port 4700
 
 ## Server
 
-- `GET /` — experiments, runs, normalized traces, and a launch form for every benchmark.
 - `GET /api/experiments[?q=]` — experiment summaries across all benchmark types
   (`q` filters by id/goal substring).
 - `POST /api/experiments` — register an experiment before its first arm. Body
@@ -90,7 +89,7 @@ stays the source of truth and historical CLI runs are auto-discovered.
 | `-d, --dataset <name>` | `terminal-bench@2.0` | Any Harbor dataset id |
 | `-i/-x, --include/--exclude <glob>` | — | Task filters (repeatable) |
 | `--timeout-multiplier <x>` | — | Scales task agent/verifier timeouts |
-| `--agent-arg <arg>` | — | Extra arg forwarded verbatim to the in-container omp CLI (repeatable) |
+| `--agent-arg <arg>` | — | Extra arg forwarded verbatim to the in-container Runtime RPC host (repeatable) |
 | `--env <KEY[=VALUE]>` | — | Forward env into the omp container (repeatable); `KEY` alone forwards the host value |
 | `--binary <path>` | — | Prebuilt omp binary (repeat for arm64+x64) |
 | `--install <source\|local\|published>` | `source` | `source` = repo bind-mount, `local` = tarball pack, `published` = npm `@oh-my-pi/pi-coding-agent` |
@@ -144,6 +143,6 @@ known-correct fix for a failed task), `--concurrency` (default 8).
   `brew install container && container system start` (macOS 26+, Apple
   silicon). `--host-network` and `--cleanup*` are docker-only, and bind
   mounts are read-write (the backend ignores `read_only`).
-- **`--install local` reflects local TS changes** (inlined into `dist/cli.js`),
+- **`--install local` reflects local TS changes** (bundled under `dist/runtime`),
   but **not** uncommitted Rust natives — rebuild `packages/natives` per target
   first (the version sentinel must match).

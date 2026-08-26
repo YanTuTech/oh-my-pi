@@ -20,7 +20,7 @@ This document covers execution/process/terminal primitives in `@oh-my-pi/pi-nati
 - **Package entrypoint** (`packages/natives/native/index.js`): loads the `.node` addon and exports generated N-API bindings.
 - **Rust N-API module layer** (`crates/pi-natives/src/*`): JS-facing shell/PTY/process/key exports and callback bridging.
 - **Runtime core** (`crates/pi-shell/src/*`): brush shell execution, cancellation cleanup, minimizer integration, command fixups, and cross-platform process references.
-- **Consumers** (`packages/coding-agent`, `packages/tui`): higher-level session policy, output artifact/minimizer handling, render policy, and UI key handling.
+- **Consumer** (`packages/coding-agent`): higher-level session policy, output artifact/minimizer handling, and host terminal-adapter policy.
 
 ## Shell subsystem (`shell`)
 

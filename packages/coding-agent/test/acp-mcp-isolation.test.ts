@@ -15,7 +15,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAcpSessionFactory } from "@oh-my-pi/pi-coding-agent/main";
+import { createAcpSessionFactory } from "@oh-my-pi/pi-coding-agent/modes/acp";
 import type { CreateAgentSessionOptions, CreateAgentSessionResult } from "@oh-my-pi/pi-coding-agent/sdk";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { TempDir } from "@oh-my-pi/pi-utils";
@@ -60,8 +60,6 @@ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 				sessionDir: tempDir.join("sessions"),
 				authStorage,
 				modelRegistry,
-				parsedArgs: {},
-				rawArgs: [],
 				createSession,
 			});
 
@@ -92,12 +90,11 @@ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 				sessionDir: tempDir.join("sessions"),
 				authStorage,
 				modelRegistry,
-				parsedArgs: { tools: ["read", "missing"] },
-				rawArgs: ["--tools", "read,missing"],
+				toolNames: ["read", "missing"],
 				createSession: async () => ({ session: fakeSession }) as CreateAgentSessionResult,
 			});
 
-			await expect(factory(tempDir.path())).rejects.toThrow(/Unknown tool in --tools: missing/);
+			await expect(factory(tempDir.path())).rejects.toThrow(/Unknown requested tool: missing/);
 			expect(disposed).toBe(true);
 		} finally {
 			await tempDir.remove();
@@ -130,8 +127,7 @@ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 				sessionDir: tempDir.join("sessions"),
 				authStorage,
 				modelRegistry,
-				parsedArgs: { trustedExtensions: [trustedPath] },
-				rawArgs: [],
+				trustedExtensionPaths: [trustedPath],
 				createSession: async options => {
 					captured = options;
 					options.eventBus?.emit("acp-session-live", undefined);
@@ -171,8 +167,7 @@ describe("createAcpSessionFactory MCP isolation (issue #1234)", () => {
 				sessionDir: tempDir.join("sessions"),
 				authStorage,
 				modelRegistry,
-				parsedArgs: { trustedExtensions: [trustedPath] },
-				rawArgs: [],
+				trustedExtensionPaths: [trustedPath],
 				createSession: async () => {
 					createCalls++;
 					throw new Error("must not create ACP session");
@@ -226,8 +221,6 @@ describe("createAcpSessionFactory TITLE_SYSTEM.md per-cwd resolution (PR #3736)"
 				sessionDir: tempDir.join("sessions"),
 				authStorage,
 				modelRegistry,
-				parsedArgs: {},
-				rawArgs: [],
 				createSession,
 			});
 

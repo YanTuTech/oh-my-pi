@@ -6,7 +6,7 @@
  * user's immediate intent) wins; otherwise an active Goal Mode budget; otherwise
  * no ceiling, with `spent` still reflecting this turn's output where available.
  */
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import type { JsStatusEvent } from "./js/shared/types";
 
 /** Synthetic bridge name reserved for the `budget` helper across both runtimes. */

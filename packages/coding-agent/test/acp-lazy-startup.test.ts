@@ -1,11 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import type { Model } from "@oh-my-pi/pi-ai";
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { createAcpConnection } from "@oh-my-pi/pi-coding-agent/modes/acp/acp-mode";
+import { createAcpConnection, createAcpSessionFactory } from "@oh-my-pi/pi-coding-agent/modes/acp";
+import {
+	applyAcpDefaultSettingOverrides,
+	applyRpcDefaultSettingOverrides,
+} from "@oh-my-pi/pi-coding-agent/modes/protocol-settings";
+import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
-import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@oh-my-pi/pi-utils";
 import {
@@ -31,19 +36,6 @@ const TEST_MODEL: Model = buildModel({
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 	contextWindow: 200_000,
 	maxTokens: 8_192,
-});
-
-let startupDir: TempDir;
-let startupAuthStorage: AuthStorage;
-
-beforeAll(() => {
-	startupDir = TempDir.createSync("@omp-acp-startup-shared-");
-	startupAuthStorage = createInMemoryAuthStorage();
-});
-
-afterAll(async () => {
-	startupAuthStorage.close();
-	await startupDir.remove();
 });
 
 function emptyWorkspaceTree(cwd: string) {
@@ -170,62 +162,14 @@ async function closeTransport(writable: WritableStream<unknown>): Promise<void> 
 
 describe("ACP lazy startup", () => {
 	it("applies schema defaults for ACP background jobs", async () => {
-		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
-
-		type ObservedBackgroundSettings = {
-			asyncEnabled: boolean;
-			asyncMaxJobs: number;
-			bashAutoBackground: boolean;
-			bashAutoBackgroundThresholdMs: number;
-		};
-
-		const runAcpStartup = async (settings: Settings): Promise<ObservedBackgroundSettings> => {
-			const cwd = startupDir.path();
-			let observed: ObservedBackgroundSettings | undefined;
-			const stopMessage = "stop test ACP mode";
-			try {
-				await runRootCommand(
-					{
-						mode: "acp",
-						messages: [],
-						fileArgs: [],
-						unknownFlags: new Map(),
-						unrecognizedFlags: [],
-						noSkills: true,
-						noRules: true,
-						noTools: true,
-						noLsp: true,
-						sessionDir: cwd,
-					},
-					[],
-					{
-						discoverAuthStorage: async () => startupAuthStorage,
-						settings,
-						runAcpMode: async () => {
-							observed = {
-								asyncEnabled: settings.get("async.enabled"),
-								asyncMaxJobs: settings.get("async.maxJobs"),
-								bashAutoBackground: settings.get("bash.autoBackground.enabled"),
-								bashAutoBackgroundThresholdMs: settings.get("bash.autoBackground.thresholdMs"),
-							};
-							throw new Error(stopMessage);
-						},
-					},
-				);
-			} catch (error) {
-				if (!(error instanceof Error) || error.message !== stopMessage) {
-					throw error;
-				}
-			}
-
-			if (!observed) {
-				throw new Error("Expected ACP mode to start");
-			}
-			return observed;
-		};
-
-		// An unset ACP config observes the background-job schema defaults.
-		await expect(runAcpStartup(Settings.isolated())).resolves.toEqual({
+		const settings = Settings.isolated();
+		applyAcpDefaultSettingOverrides(settings);
+		expect({
+			asyncEnabled: settings.get("async.enabled"),
+			asyncMaxJobs: settings.get("async.maxJobs"),
+			bashAutoBackground: settings.get("bash.autoBackground.enabled"),
+			bashAutoBackgroundThresholdMs: settings.get("bash.autoBackground.thresholdMs"),
+		}).toEqual({
 			asyncEnabled: true,
 			asyncMaxJobs: 100,
 			bashAutoBackground: true,
@@ -234,13 +178,10 @@ describe("ACP lazy startup", () => {
 	});
 
 	it("honors explicit host-defaulted and todo settings for protocol hosts", async () => {
-		// Regression for #3207: in RPC/ACP startup, runtime overrides applied via
-		// `applyDefaultSettingOverrides` previously clobbered any explicitly
+		// Regression for #3207: protocol-host defaults previously clobbered explicit
 		// configured value (caller, project, --config overlay, or global) with the
 		// schema default. The fix (re-)added an `isConfigured` guard so explicit
 		// configuration survives, and the schema default only fills holes.
-		const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
-
 		const explicit = {
 			"task.isolation.mode": "rcopy",
 			"task.isolation.apply": false,
@@ -272,58 +213,11 @@ describe("ACP lazy startup", () => {
 			...(Object.keys(explicit) as (keyof typeof explicit)[]),
 			...(Object.keys(rpcOnlyExplicit) as (keyof typeof rpcOnlyExplicit)[]),
 		];
-		type ObservedSettings = Record<string, unknown>;
-
-		const runProtocolStartup = async (mode: "rpc" | "rpc-ui" | "acp"): Promise<ObservedSettings> => {
-			const cwd = startupDir.path();
+		for (const applyDefaults of [applyRpcDefaultSettingOverrides, applyAcpDefaultSettingOverrides]) {
 			const settings = Settings.isolated({ ...explicit, ...rpcOnlyExplicit });
-			let observed: ObservedSettings | undefined;
-			const stopMessage = "stop test host-defaulted settings";
-			const observe = () => {
-				observed = {};
-				for (const key of allPaths) {
-					observed[key] = settings.get(key);
-				}
-				throw new Error(stopMessage);
-			};
-
-			try {
-				await runRootCommand(
-					{
-						mode,
-						messages: [],
-						fileArgs: [],
-						unknownFlags: new Map(),
-						unrecognizedFlags: [],
-						noSkills: true,
-						noRules: true,
-						noTools: true,
-						noLsp: true,
-						noExtensions: true,
-						sessionDir: cwd,
-					},
-					[],
-					{
-						discoverAuthStorage: async () => startupAuthStorage,
-						settings,
-						createAgentSession: async () => observe(),
-						runAcpMode: async () => observe(),
-					},
-				);
-			} catch (error) {
-				if (!(error instanceof Error) || error.message !== stopMessage) {
-					throw error;
-				}
-			}
-
-			if (!observed) {
-				throw new Error("Expected protocol mode to start");
-			}
-			return observed;
-		};
-
-		for (const mode of ["rpc", "rpc-ui", "acp"] as const) {
-			await expect(runProtocolStartup(mode)).resolves.toEqual({ ...explicit, ...rpcOnlyExplicit });
+			applyDefaults(settings);
+			const observed = Object.fromEntries(allPaths.map(key => [key, settings.get(key)]));
+			expect(observed).toEqual({ ...explicit, ...rpcOnlyExplicit });
 		}
 	});
 
@@ -384,7 +278,7 @@ describe("ACP lazy startup", () => {
 		}
 	});
 
-	it("applies CLI runtime API keys after ACP lazy session creation resolves extension models", async () => {
+	it("applies runtime API keys after ACP lazy session creation resolves extension models", async () => {
 		using tempDir = TempDir.createSync("@omp-acp-lazy-api-key-");
 		const cwd = tempDir.path();
 
@@ -412,54 +306,37 @@ describe("ACP lazy startup", () => {
 		const authStorage = createInMemoryAuthStorage();
 		try {
 			const settings = Settings.isolated({ "marketplace.autoUpdate": "off" });
-			const { runRootCommand } = await import("@oh-my-pi/pi-coding-agent/main");
-			const { createAgentSession } = await import("@oh-my-pi/pi-coding-agent/sdk");
-			let session: AgentSession | undefined;
+			const modelRegistry = new ModelRegistry(authStorage);
 			let sessionHasUI: boolean | undefined;
 			let deferredUsageReserveConfirmation: boolean | undefined;
-
-			const stopped = runRootCommand(
-				{
-					mode: "acp",
-					apiKey: "cli-runtime-key",
-					messages: [],
-					fileArgs: [],
-					unknownFlags: new Map(),
-					unrecognizedFlags: [],
-					noSkills: true,
-					noRules: true,
-					noTools: true,
-					noLsp: true,
-					sessionDir: cwd,
-					extensions: [path.join(cwd, "runtime-provider.ts")],
-					model: "runtime-provider/runtime-model",
+			const extensionPath = path.join(cwd, "runtime-provider.ts");
+			const factory = createAcpSessionFactory({
+				baseOptions: {
+					additionalExtensionPaths: [extensionPath],
+					disableExtensionDiscovery: true,
+					modelPattern: "runtime-provider/runtime-model",
+					workspaceTree: emptyWorkspaceTree(cwd),
 				},
-				[],
-				{
-					discoverAuthStorage: async () => authStorage,
-					createAgentSession: options => {
-						const sessionOptions = options ?? {};
-						sessionHasUI = sessionOptions.hasUI;
-						deferredUsageReserveConfirmation = sessionOptions.deferUsageReserveConfirmation;
-						return createAgentSession({
-							...sessionOptions,
-							workspaceTree: sessionOptions.workspaceTree ?? emptyWorkspaceTree(sessionOptions.cwd ?? cwd),
-						});
-					},
-					settings,
-					runAcpMode: async createAcpSession => {
-						session = (await createAcpSession(cwd)).session;
-						throw new Error("stop test ACP mode");
-					},
+				settings,
+				sessionDir: cwd,
+				authStorage,
+				modelRegistry,
+				runtimeApiKey: "runtime-key",
+				trustedExtensionPaths: [extensionPath],
+				createSession: sessionOptions => {
+					sessionHasUI = sessionOptions.hasUI;
+					deferredUsageReserveConfirmation = sessionOptions.deferUsageReserveConfirmation;
+					return createAgentSession(sessionOptions);
 				},
-			);
-			await expect(stopped).rejects.toThrow("stop test ACP mode");
+			});
+			const created = await factory(cwd);
+			const session = "session" in created ? created.session : created;
 
 			if (!session?.model) {
 				throw new Error("Expected extension model to resolve");
 			}
 			expect(session.model.provider).toBe("runtime-provider");
-			expect(await session.modelRegistry.getApiKey(session.model)).toBe("cli-runtime-key");
+			expect(await session.modelRegistry.getApiKey(session.model)).toBe("runtime-key");
 			expect(sessionHasUI).toBe(false);
 			expect(deferredUsageReserveConfirmation).toBe(true);
 			await session.dispose();

@@ -18,13 +18,13 @@ import type {
 	ProviderSessionState,
 } from "@oh-my-pi/pi-ai";
 import { logger } from "@oh-my-pi/pi-utils";
-import type { BenchRuntime, BenchTarget, StreamSimpleFn } from "../cli/bench-runtime";
 import { formatModelSelectorValue, formatModelString } from "../config/model-resolver";
 import { shouldDisableReasoning, toReasoningEffort } from "../thinking";
 import type { Action } from "./actions";
 import { applyActions, initialArray, makeActions } from "./actions";
 import type { CatPlacement, IfBenchFailure } from "./protocol";
 import { assessResponse, buildSystemPrompt, buildTurnPrompt } from "./protocol";
+import type { BenchRuntime, BenchTarget, StreamSimpleFn } from "./runtime-types";
 
 /** Outcome of one turn: what was asked, what came back, and how it scored. */
 export interface IfBenchTurnRecord {

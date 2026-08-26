@@ -1,8 +1,5 @@
 import { type } from "@oh-my-pi/omptype";
-import { Text } from "@oh-my-pi/pi-tui";
 import type { ToolDefinition } from "../../extensibility/extensions";
-import type { Theme } from "../../modes/theme/theme";
-import { replaceTabs, truncateToWidth } from "../../tools/render-utils";
 import * as git from "../../utils/git";
 import { buildExperimentState } from "../state";
 import { openAutoresearchStorageIfExists } from "../storage";
@@ -68,18 +65,6 @@ export function createUpdateNotesTool(
 				],
 				details: { notes: nextNotes },
 			};
-		},
-		renderCall(args, _options, theme): Text {
-			const preview = args.append_idea ?? args.body.slice(0, 100);
-			return new Text(
-				`${theme.fg("toolTitle", theme.bold("update_notes"))} ${theme.fg("muted", truncateToWidth(replaceTabs(preview), 100))}`,
-				0,
-				0,
-			);
-		},
-		renderResult(result, _options, theme: Theme): Text {
-			const text = replaceTabs(result.content.find(part => part.type === "text")?.text ?? "");
-			return new Text(theme.fg("muted", text), 0, 0);
 		},
 	};
 }

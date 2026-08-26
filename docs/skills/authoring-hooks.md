@@ -253,7 +253,7 @@ export default function contextFilter(omp: HookAPI): void {
 | `editor(title, prefill?, { signal }?, { promptStyle }?)` | Show a multi-line editor |
 | `setEditorText(text)` | Set the input editor content |
 | `getEditorText()` | Get current input editor content |
-| `custom(factory)` | Render a custom TUI component |
+| `custom(factory)` | Legacy component factory retained for compatible interactive hosts |
 | `theme` | Current theme object |
 
 Pass `{ promptStyle: true }` as the fourth argument when Enter should submit and Shift+Enter should insert a newline. The default hook editor behavior keeps Enter as newline and submits on the `app.message.followUp` chord (`Ctrl+Q` or `Ctrl+Enter`).

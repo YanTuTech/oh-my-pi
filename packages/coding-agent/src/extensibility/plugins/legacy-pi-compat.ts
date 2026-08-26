@@ -857,7 +857,7 @@ const CANONICAL_PI_SCOPE = "@oh-my-pi";
 const PI_SCOPE_ALIASES = ["oh-my-pi", "mariozechner", "earendil-works"] as const;
 
 // Internal pi-* package basenames bundled inside the omp binary.
-const PI_PACKAGE_NAMES = ["pi-agent-core", "pi-ai", "pi-coding-agent", "pi-natives", "pi-tui", "pi-utils"] as const;
+const PI_PACKAGE_NAMES = ["pi-agent-core", "pi-ai", "pi-coding-agent", "pi-natives", "pi-utils"] as const;
 
 const PI_SCOPE_ALTERNATION = PI_SCOPE_ALIASES.join("|");
 const PI_PACKAGE_ALTERNATION = PI_PACKAGE_NAMES.join("|");
@@ -927,25 +927,31 @@ const PACKAGE_IMPORT_EXCLUDED = Symbol("packageImportExcluded");
 // vendor TypeBox directly.
 const TYPEBOX_SPECIFIER_FILTER = /^(?:@sinclair\/typebox|typebox)$/;
 
-// Compat-shim path resolution. In compiled-binary mode every bundled surface
+// Compat-shim path resolution. In a compiled host every bundled surface
 // is served through the `omp-legacy-pi-bundled:` virtual namespace (see the
 // bundled-module block above) — bunfs paths are unreachable on Bun 1.3.14+, so the
 // pre-#3423 helpers that derived `/$bunfs/root/...` paths from
 // `import.meta.dir` are gone. Dev / source-link / installed-package modes
 // still need a real filesystem path for the source shims, which
-// `sourceShimPath` computes either from the npm prebuilt `dist/cli.js`
-// bundle (`PI_BUNDLED=true`) or directly from the monorepo source tree.
+// `sourceShimPath` computes either from the emitted `dist/runtime` bundle
+// (`PI_BUNDLED=true`) or directly from the monorepo source tree.
 
 /**
- * Compute the package root for the npm prebuilt `dist/cli.js` bundle.
+ * Compute the package root for an emitted Runtime bundle.
  *
- * `bundle-dist.ts` defines `process.env.PI_BUNDLED="true"`; after bundling,
- * `import.meta.dir` points at `<package>/dist`. Do not resolve the package via
+ * The Runtime build defines `process.env.PI_BUNDLED="true"`; after bundling,
+ * `import.meta.dir` points at `<package>/dist/runtime`. Do not resolve the package via
  * bare `@oh-my-pi/pi-coding-agent` here: from a global install Bun can pick an
  * older cache entry, recreating mixed-runtime plugin loading.
  */
 export function __computeBundledSelfPackageRoot(metaDir: string, pathImpl: typeof path = path): string {
 	const normalizedMetaDir = pathImpl.normalize(metaDir);
+	if (
+		pathImpl.basename(normalizedMetaDir) === "runtime" &&
+		pathImpl.basename(pathImpl.dirname(normalizedMetaDir)) === "dist"
+	) {
+		return pathImpl.resolve(metaDir, "..", "..");
+	}
 	if (pathImpl.basename(normalizedMetaDir) === "dist") {
 		return pathImpl.resolve(metaDir, "..");
 	}
@@ -1018,14 +1024,7 @@ const LEGACY_PI_CODING_AGENT_SHIM_PATH = IS_COMPILED_BINARY
 	? bundledModuleVirtualSpecifier(`${CANONICAL_PI_SCOPE}/pi-coding-agent`)
 	: sourceShimPath("legacy-pi-coding-agent-shim.ts");
 
-// Legacy pi-tui exported `decodeKittyPrintable` from its package root. The
-// canonical TUI replaced it with the broader `decodePrintableKey`; route only
-// legacy root imports through a sibling shim that preserves the old name.
-const LEGACY_PI_TUI_SHIM_PATH = IS_COMPILED_BINARY
-	? bundledModuleVirtualSpecifier(`${CANONICAL_PI_SCOPE}/pi-tui`)
-	: sourceShimPath("legacy-pi-tui-shim.ts");
-
-// Package-root overrides. Shim entries (`pi-ai`, `pi-coding-agent`, `pi-tui`)
+// Package-root overrides. Shim entries (`pi-ai`, `pi-coding-agent`)
 // always replace the canonical surface so legacy helpers stay reachable. The
 // other bundled host packages (`pi-agent-core`, `pi-natives`, `pi-utils`) are
 // added only in compiled-binary mode to route extensions onto the in-process
@@ -1077,7 +1076,6 @@ export function __buildLegacyPiPackageRootOverrides(
 	const candidates: Record<string, string> = {
 		[`${CANONICAL_PI_SCOPE}/pi-ai`]: LEGACY_PI_AI_SHIM_PATH,
 		[`${CANONICAL_PI_SCOPE}/pi-coding-agent`]: LEGACY_PI_CODING_AGENT_SHIM_PATH,
-		[`${CANONICAL_PI_SCOPE}/pi-tui`]: LEGACY_PI_TUI_SHIM_PATH,
 	};
 	if (isCompiled) {
 		for (const key of bundledModuleKeys) {

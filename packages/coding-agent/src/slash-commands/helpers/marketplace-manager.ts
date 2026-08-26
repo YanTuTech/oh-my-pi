@@ -6,7 +6,7 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../../extensibility/plugins/marketplace";
-import type { SlashCommandRuntime } from "../types";
+import type { SlashCommandRuntime } from "../runtime-types";
 
 /**
  * Build a `MarketplaceManager` wired up with the active project's registry

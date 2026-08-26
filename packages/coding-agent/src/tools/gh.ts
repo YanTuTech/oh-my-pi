@@ -17,7 +17,6 @@ import {
 import githubDescription from "../prompts/tools/github.md" with { type: "text" };
 import * as git from "../utils/git";
 import { loadImageAttachmentInput, webpExclusionForModel } from "../utils/image-loading";
-import type { ToolSession } from ".";
 import { buildTextResult, normalizeOptionalString, requireNonEmpty, resolveGitHubRepo } from "./gh-common";
 import { executePrCheckout, executePrCreate, executePrPush } from "./gh-pr-checkout";
 import { executeRunWatch } from "./gh-run-watch";
@@ -30,6 +29,7 @@ import {
 } from "./gh-search";
 import { executeRepoView } from "./gh-view";
 import type { OutputMeta } from "./output-meta";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
 

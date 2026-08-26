@@ -81,7 +81,7 @@ Current effects:
 - `astGrep` / `astEdit` directory discovery: `hidden=true`, `gitignore=true`, cache always enabled; skips `.git`; excludes `node_modules` unless the supplied glob mentions it; never follows symlinks; uses minimal detail and path order.
 - `grep`: candidate walks skip `.git`, never follow symlinks, use minimal detail, and are uncached.
 
-The TUI `@`-mention autocomplete opts into cached `fuzzyFind`. Coding-agent's grep tool does not populate this cache.
+Host `@`-mention autocomplete may opt into cached `fuzzyFind`. Coding-agent's grep tool does not populate this cache.
 
 ## Invalidation
 

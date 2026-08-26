@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import { postmortem } from "@oh-my-pi/pi-utils";
-import { theme } from "../modes/theme/theme";
 import { expandPath, normalizeLocalScheme } from "../tools/path-utils";
 import type { HookUIContext } from "./hooks/types";
+import type { Theme } from "./ui-contract";
 
 /**
  * Resolve a file path:
@@ -39,7 +39,7 @@ export function createNoOpUIContext(): HookUIContext {
 		getEditorText: () => "",
 		editor: async () => undefined,
 		get theme() {
-			return theme;
+			return undefined as unknown as Theme;
 		},
 	};
 }

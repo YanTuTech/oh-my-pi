@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { TempDir } from "@oh-my-pi/pi-utils";
-import type { ToolSession } from "../tools";
+import type { ToolSession } from "../tools/runtime";
 import {
 	applySloppy,
 	computeSloppySectionDiff,

@@ -317,7 +317,7 @@ def _drive_turn(
         except (RpcError, RpcProcessExitError):
             # Did the agent intentionally pull the plug via `abort_task`?
             # If so, swallow — the abort path is a clean exit, not a
-            # failure that should surface in the dashboard or trigger
+            # failure that should surface in the status API or trigger
             # a comment to the reporter. Anything else propagates.
             if bindings.abort is not None and bindings.abort.triggered:
                 log.info(

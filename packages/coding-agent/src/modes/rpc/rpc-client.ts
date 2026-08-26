@@ -48,8 +48,8 @@ type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : n
 type RpcCommandBody = DistributiveOmit<RpcCommand, "id">;
 
 export interface RpcClientOptions {
-	/** Path to the CLI entry point (default: searches for dist/cli.js) */
-	cliPath?: string;
+	/** Optional compatible RPC process entrypoint; defaults to the headless Runtime RPC host. */
+	rpcHostPath?: string;
 	/** Working directory for the agent */
 	cwd?: string;
 	/** Environment variables */
@@ -60,7 +60,7 @@ export interface RpcClientOptions {
 	model?: string;
 	/** Session directory for the agent */
 	sessionDir?: string;
-	/** Additional CLI arguments */
+	/** Additional Runtime host arguments */
 	args?: string[];
 	/** Grace period before escalating process termination (default: process utility default, 1000ms) */
 	terminationGraceMs?: number;
@@ -285,7 +285,8 @@ export class RpcClient {
 		this.#abortController = new AbortController();
 		this.#protocolVersion = 1;
 
-		const cliPath = this.options.cliPath ?? "dist/cli.js";
+		const rpcHostPath =
+			this.options.rpcHostPath ?? Bun.resolveSync("@oh-my-pi/pi-coding-agent/runtime-rpc-host", import.meta.dir);
 		const args = ["--mode", "rpc"];
 
 		if (this.options.provider) {
@@ -301,7 +302,7 @@ export class RpcClient {
 			args.push(...this.options.args);
 		}
 
-		const child = ptree.spawn(["bun", cliPath, ...args], {
+		const child = ptree.spawn(["bun", rpcHostPath, ...args], {
 			cwd: this.options.cwd,
 			env: { ...Bun.env, ...this.options.env },
 			stdin: "pipe",
@@ -778,19 +779,17 @@ export class RpcClient {
 		return this.#getData(response);
 	}
 
+	/** Export the current persisted session to the standalone HTML viewer. */
+	async exportHtml(outputPath?: string): Promise<{ path: string }> {
+		const response = await this.#send({ type: "export_html", outputPath });
+		return this.#getData(response);
+	}
+
 	/**
 	 * Hand off session context to a new session.
 	 */
 	async handoff(customInstructions?: string): Promise<RpcHandoffResult | null> {
 		const response = await this.#send({ type: "handoff", customInstructions });
-		return this.#getData(response);
-	}
-
-	/**
-	 * Export session to HTML.
-	 */
-	async exportHtml(outputPath?: string): Promise<{ path: string }> {
-		const response = await this.#send({ type: "export_html", outputPath });
 		return this.#getData(response);
 	}
 

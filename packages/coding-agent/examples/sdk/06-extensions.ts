@@ -19,7 +19,7 @@ import { createAgentSession, SessionManager } from "@oh-my-pi/pi-coding-agent";
 // Use the discovery mechanism:
 //   1. Place extension files in ~/.omp/agent/extensions/ or .omp/extensions/
 //   2. Add paths to settings.json: { "extensions": ["./my-extension.ts"] }
-//   3. Use --extension flag: pi --extension ./my-extension.ts
+//   3. Pass it through CreateAgentSessionOptions.additionalExtensionPaths
 
 // To add additional extension paths beyond discovery:
 const { session } = await createAgentSession({

@@ -11,13 +11,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Body, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from robomp import github_events, issue_index
 from robomp.autoclose import AutocloseScheduler
 from robomp.config import Settings, get_settings
-from robomp.dashboard import render_index, static_dir, tail_jsonl
 from robomp.db import (
     INACTIVE_EVENT_STATES,
     Database,
@@ -31,6 +29,7 @@ from robomp.db import (
 from robomp.github_backend import GitHubBackend
 from robomp.github_client import GitHubError, IssueSummary
 from robomp.issue_index import IssueIndexSync
+from robomp.log_tail import tail_jsonl
 from robomp.manual_triage import (
     InvalidIssueRef,
     ManualTriageConflict,
@@ -72,12 +71,12 @@ class _IssueBrowseCacheEntry:
 
 
 class _IssueBrowseCache:
-    """In-process cache for the dashboard's GitHub issue browser.
+    """In-process cache for the headless GitHub issue browser API.
 
     The browse panel is a convenience picker. It should not hit GitHub's
     `/issues` endpoint on every browser reload because that endpoint returns PRs
-    mixed into the issue list. Webhooks keep warmed entries fresh; the dashboard
-    Refresh button can still force a live pull when an operator wants one.
+    mixed into the issue list. Webhooks keep warmed entries fresh; API callers
+    can still force a live pull when an operator wants one.
     """
 
     def __init__(self) -> None:
@@ -534,7 +533,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Browse issues across `ROBOMP_REPO_ALLOWLIST` for the trigger picker.
 
         Token-gated identically to `/api/trigger`: this can expose titles from
-        private repos. Normal dashboard loads use the server cache; only cache
+        private repos. Normal API reads use the server cache; only cache
         misses and explicit refreshes hit GitHub.
         """
         bag = request.app.state.bag
@@ -577,7 +576,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             fetch=_fetch,
         )
         # `processed` is not cached: a freshly-triaged issue must immediately
-        # disappear from the "fresh issues" filter on the next dashboard refresh.
+        # disappear from the "fresh issues" filter on the next API refresh.
         db: Database = bag["db"]
         processed = frozenset(db.processed_issue_keys(make_issue_key(s.repo, s.number) for s in entry.issues))
         return _issue_browse_payload(entry=entry, cache_hit=cache_hit, processed_keys=processed)
@@ -747,12 +746,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         rows = request.app.state.bag["db"].list_releases(limit=capped)
         return {"releases": [_release_payload(row) for row in rows]}
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> HTMLResponse:
-        cfg: Settings = request.app.state.bag["settings"]
-        token = cfg.replay_token.get_secret_value() if cfg.replay_token else None
-        return HTMLResponse(render_index(token))
-
     @app.get("/api/status")
     async def api_status(request: Request) -> dict[str, Any]:
         bag = request.app.state.bag
@@ -762,11 +755,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         started = float(bag.get("started_at") or time.time())
 
         def _collect() -> dict[str, Any]:
-            # All SQLite reads run off the event loop. The dashboard polls this
-            # every 3s, and the queries (200 issues + per-issue latest events +
-            # state counts) can take seconds under load; doing them inline
-            # would block the loop and stall every other endpoint — including
-            # /healthz — which is how the dashboard ends up "never loading".
+            # All SQLite reads run off the event loop. Status consumers may poll
+            # frequently, and these queries can take seconds under load; doing
+            # them inline would block every other endpoint, including /healthz.
             issues_rows = db.list_issues(limit=200)
             release_rows = db.list_releases(limit=50)
             latest_events = db.latest_events_for_issues(r.key for r in issues_rows)
@@ -788,7 +779,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             # Recent events can reference issues outside the capped 200-issue
             # `issues` window above. Surface each event's current DB issue state
-            # so the dashboard can suppress failures for issues that have since
+            # so API consumers can suppress failures for issues that have since
             # gone terminal (merged/closed/abandoned) without a row to consult.
             # Reuse the already-loaded issue states; fall back to a per-key
             # lookup (bounded by the 25-event cap) for keys outside the window.
@@ -858,11 +849,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         capped = max(1, min(int(limit), 2000))
         entries = tail_jsonl(cfg.log_dir / "robomp.log.jsonl", limit=capped)
         return {"entries": entries, "count": len(entries), "limit": capped}
-
-    # Mount the built dashboard bundle. The `index.html` itself is served by
-    # the `@app.get("/")` handler above so the per-instance replay-token can
-    # be substituted; `/static/*` carries the hashed JS/CSS produced by Vite.
-    app.mount("/static", StaticFiles(directory=static_dir()), name="static")
 
     return app
 

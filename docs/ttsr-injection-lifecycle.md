@@ -14,7 +14,6 @@ This document covers the current Time Traveling Stream Rules (TTSR) runtime path
 - [`../src/extensibility/extensions/types.ts`](../packages/coding-agent/src/extensibility/extensions/types.ts)
 - [`../src/extensibility/hooks/types.ts`](../packages/coding-agent/src/extensibility/hooks/types.ts)
 - [`../src/extensibility/custom-tools/types.ts`](../packages/coding-agent/src/extensibility/custom-tools/types.ts)
-- [`../src/modes/controllers/event-controller.ts`](../packages/coding-agent/src/modes/controllers/event-controller.ts)
 
 ## 1. Discovery feed and rule registration
 
@@ -207,9 +206,9 @@ A rule can re-trigger only when:
 - hook API exposes `on("ttsr_triggered", ...)`
 - custom tools receive `onSession({ reason: "ttsr_triggered", rules })`
 
-### Interactive-mode rendering difference
+### Host event projection
 
-Interactive mode uses `session.isTtsrAbortPending` to suppress showing the aborted assistant stop reason as a visible failure during TTSR interruption, and renders a `TtsrNotificationComponent` when the event arrives.
+`session.isTtsrAbortPending` lets a host suppress the redundant aborted-assistant stop reason during TTSR interruption. The Runtime emits the `ttsr_triggered` event and leaves presentation to the host.
 
 ## 7. Persistence and resume state (current implementation)
 

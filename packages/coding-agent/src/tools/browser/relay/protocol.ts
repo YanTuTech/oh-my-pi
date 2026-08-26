@@ -1,3 +1,6 @@
+/** Hidden selector used to launch the headless browser relay worker. */
+export const BROWSER_RELAY_WORKER_ARG = "__omp_worker_browser_relay";
+
 /**
  * Wire protocol between the relay server and the Chrome extension.
  *

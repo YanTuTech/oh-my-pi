@@ -1,7 +1,6 @@
 import type { AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import type { Settings } from "../config/settings";
 import * as git from "../utils/git";
-import type { ToolSession } from ".";
 import type { GhToolDetails } from "./gh";
 import {
 	appendRepoFlag,
@@ -30,6 +29,7 @@ import type {
 	GithubInput,
 } from "./gh-types";
 import { type CacheStatus, getOrFetchView, resolveGithubCacheAuthKey } from "./github-cache";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 export const GH_REPO_FIELDS = [

@@ -39,19 +39,7 @@ import type {
 	UsageProvider,
 } from "@oh-my-pi/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@oh-my-pi/pi-ai/oauth/types";
-import type {
-	AutocompleteItem,
-	AutocompleteProvider,
-	Component,
-	ComposerStyle,
-	EditorTheme,
-	KeyId,
-	OverlayHandle,
-	OverlayOptions,
-	TUI,
-} from "@oh-my-pi/pi-tui";
 import type { logger as PiLogger } from "@oh-my-pi/pi-utils";
-import type { KeybindingsManager } from "../../config/keybindings";
 import type { ModelRegistry } from "../../config/model-registry";
 import type { EditToolDetails } from "../../edit";
 import type { PythonResult } from "../../eval/py/executor";
@@ -60,25 +48,17 @@ import type { ExecOptions, ExecResult } from "../../exec/exec";
 import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
-import type { CustomEditor } from "../../modes/components/custom-editor";
-import type { Theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { CompactMode } from "../../session/compact-modes";
 import type { CustomMessage, CustomMessagePayload } from "../../session/messages";
 import type { ReadonlySessionManager, SessionManager } from "../../session/session-manager";
-import type {
-	BashToolDetails,
-	BashToolInput,
-	GlobToolDetails,
-	GlobToolInput,
-	GrepToolDetails,
-	GrepToolInput,
-	ReadToolDetails,
-	ReadToolInput,
-	WriteToolInput,
-} from "../../tools";
 import type { ApprovalMode } from "../../tools/approval";
+import type { BashToolDetails, BashToolInput } from "../../tools/bash";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
+import type { GlobToolDetails, GlobToolInput } from "../../tools/glob";
+import type { GrepToolDetails, GrepToolInput } from "../../tools/grep";
+import type { ReadToolDetails, ReadToolInput } from "../../tools/read";
+import type { WriteToolInput } from "../../tools/write";
 import type { EventBus } from "../../utils/event-bus";
 import type {
 	AgentEndEvent,
@@ -118,10 +98,22 @@ import type {
 	TurnStartEvent,
 } from "../shared-events";
 import type { SlashCommandInfo } from "../slash-commands";
+import type {
+	AutocompleteItem,
+	AutocompleteProvider,
+	Component,
+	ComposerStyle,
+	EditorTheme,
+	KeybindingsManager,
+	KeyId,
+	OverlayHandle,
+	OverlayOptions,
+	Theme,
+	TUI,
+} from "../ui-contract";
 
-export type { OverlayHandle, OverlayOptions } from "@oh-my-pi/pi-tui";
-export type { AppKeybinding, KeybindingsManager } from "../../config/keybindings";
 export type { ExecOptions, ExecResult } from "../../exec/exec";
+export type { KeybindingsManager, OverlayHandle, OverlayOptions } from "../ui-contract";
 export type { AgentToolResult, AgentToolUpdateCallback };
 
 // ============================================================================
@@ -348,7 +340,7 @@ export interface ExtensionUIContext {
 	 * required by interactive mode.
 	 */
 	setEditorComponent(
-		factory: ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => CustomEditor) | undefined,
+		factory: ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => Component) | undefined,
 	): void;
 
 	/** Get the current theme for styling. */
@@ -655,10 +647,10 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	/** Called on session lifecycle events - use to reconstruct state or cleanup resources */
 	onSession?: (event: ToolSessionEvent, ctx: ExtensionContext) => void | Promise<void>;
 
-	/** Custom rendering for tool call display */
+	/** Optional host-renderer hook for the tool call. */
 	renderCall?: (args: Static<TParams>, options: ToolRenderResultOptions, theme: Theme) => Component;
 
-	/** Custom rendering for tool result display */
+	/** Optional host-renderer hook for the tool result. */
 	renderResult?: (
 		result: AgentToolResult<TDetails>,
 		options: ToolRenderResultOptions,

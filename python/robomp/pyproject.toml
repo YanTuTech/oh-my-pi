@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "robomp"
 version = "0.1.0"
-description = "Self-hosted GitHub triage/fix bot driving omp --mode rpc"
+description = "Self-hosted GitHub triage/fix bot driving the headless Agent Runtime RPC host"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -38,7 +38,7 @@ package-dir = { "robomp" = "src" }
 packages = ["robomp", "robomp.proxy"]
 
 [tool.setuptools.package-data]
-robomp = ["prompts/*", "py.typed", "static/*", "static/assets/*"]
+robomp = ["prompts/*", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

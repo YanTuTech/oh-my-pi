@@ -17,7 +17,7 @@ import {
 	type SessionCompactEvent,
 	type SessionEvent,
 } from "@oh-my-pi/pi-coding-agent/extensibility/hooks";
-import { theme } from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
+import { runtimeTheme } from "@oh-my-pi/pi-coding-agent/extensibility/ui-contract";
 import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
@@ -123,7 +123,7 @@ describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("Compaction hooks", () => {
 				getEditorText: () => "",
 				editor: async () => undefined,
 				get theme() {
-					return theme;
+					return runtimeTheme;
 				},
 			},
 			hasUI: false,

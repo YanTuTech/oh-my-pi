@@ -1,6 +1,6 @@
 # Magic keywords
 
-Magic keywords are standalone prose words in a user prompt that can add hidden, user-attributed instructions for that turn. Notice injection is enabled by default. The TUI highlights recognized words with animated gradients while editing and static gradients in sent messages; highlighting is a visual affordance and currently remains even when notice injection is disabled in settings.
+Magic keywords are standalone prose words in a user prompt that can add hidden, user-attributed instructions for that turn. Notice injection is enabled by default. The headless Runtime performs recognition and instruction injection; visual highlighting is a host concern.
 
 ## Keywords
 

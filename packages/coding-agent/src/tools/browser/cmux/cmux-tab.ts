@@ -5,7 +5,6 @@ import { logger, postmortem, Snowflake, untilAborted } from "@oh-my-pi/pi-utils"
 import { JsRuntime, type RuntimeHooks } from "../../../eval/js/shared/runtime";
 import { callSessionTool } from "../../../eval/js/tool-bridge";
 import { resizeImage } from "../../../utils/image-resize";
-import type { ToolSession } from "../../index";
 import { resolveToCwd } from "../../path-utils";
 import { formatScreenshot } from "../../render-utils";
 import {
@@ -18,6 +17,7 @@ import {
 	waitForRun,
 	withBrowserPromiseCombinatorTracking,
 } from "../../run-scope";
+import type { ToolSession } from "../../runtime";
 import { ToolAbortError, ToolError, throwIfAborted } from "../../tool-errors";
 import { type AriaSnapshotOptions, assertSelectorString, buildAriaSnapshotScript } from "../aria/aria-snapshot";
 import { DEFAULT_VIEWPORT } from "../launch";

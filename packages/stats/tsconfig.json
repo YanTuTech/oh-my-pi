@@ -1,11 +1,9 @@
 {
 	"extends": "../tsconfig.workspace.json",
 	"include": [
-		"src",
-		"scripts"
+		"src"
 	],
 	"exclude": [
-		"src/client",
 		"dist",
 		"node_modules"
 	]

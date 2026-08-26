@@ -1,3 +1,5 @@
+/// <reference path="../policy/omp-policy-modules.d.ts" />
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 import {
@@ -7,16 +9,25 @@ import {
 	parseRuntimePolicy,
 } from "../policy/runtime-policy";
 
+const contentCache = new Map<string, string | null>();
+const dirCache = new Map<string, fs.Dirent[]>();
+
+interface PolicyModules {
+	limits: PolicyLimits;
+	digest: DigestProtectedPaths;
+}
+
 // Single import location for the two generated policy modules (spec §4.2① /
 // §12). Task 30 injects their real values into the bundle via a virtual-module
 // plugin whose onResolve/onLoad count assertions rely on this import existing;
 // the fork's `bun test` resolves them through `test/policy-virtual-modules.ts`.
 //
-// The import is a top-level dynamic import so modules that transitively import
-// this file can still LOAD when the generated modules are unavailable (running
-// outside the managed bundle without the test shim): in that case the worker
-// FAILS CLOSED — every context read is denied (never degradation-to-allow).
-const policyModules: { limits: PolicyLimits; digest: DigestProtectedPaths } | null = await (async () => {
+// Start loading immediately, but do not suspend module evaluation. Capability
+// discovery has import cycles, so a top-level await here exposes partially
+// initialized exports to callers. Reads await the same shared promise and fail
+// closed when the generated modules are unavailable (running outside the
+// managed bundle without the test shim).
+const policyModulesPromise: Promise<PolicyModules | null> = (async () => {
 	try {
 		const limitsMod = await import("./omp-policy-limits.generated");
 		const digestMod = await import("./omp-policy-digest.generated");
@@ -25,9 +36,6 @@ const policyModules: { limits: PolicyLimits; digest: DigestProtectedPaths } | nu
 		return null;
 	}
 })();
-
-const contentCache = new Map<string, string | null>();
-const dirCache = new Map<string, fs.Dirent[]>();
 
 function resolvePath(filePath: string): string {
 	return path.resolve(filePath);
@@ -62,6 +70,7 @@ export function __setToctouHook(fn: (() => Promise<void>) | null): void {
  */
 export async function readFile(filePath: string): Promise<string | null> {
 	const abs = resolvePath(filePath);
+	const policyModules = await policyModulesPromise;
 
 	// Generated policy modules unavailable → fail closed (no context reads).
 	if (policyModules === null) {

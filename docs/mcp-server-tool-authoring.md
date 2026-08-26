@@ -195,7 +195,7 @@ assume that every field present in the model-generated call reaches the server.
 
 ## 5) Operator lifecycle: add/edit/remove and live updates
 
-Interactive mode exposes `/mcp` in `src/modes/controllers/mcp-command-controller.ts`.
+RPC/ACP and SDK hosts may expose the retained MCP management commands or call the manager APIs directly.
 
 Supported operations:
 
@@ -221,7 +221,7 @@ After changes, controller calls `#reloadMCP()`:
 
 ### Mode differences
 
-- **Interactive/TUI mode**: `/mcp` gives in-app UX (wizard, OAuth flow, connection status text, immediate runtime rebinding).
+- **Interactive host compatibility**: a host may provide OAuth/browser flows, connection status, and immediate runtime rebinding through the retained interaction contract.
 - **SDK/headless integration**: `discoverAndLoadMCPTools()` (`src/mcp/loader.ts`) returns loaded tools + per-server errors; no `/mcp` command UX.
 
 ## 6) User-visible error surfaces
@@ -265,7 +265,7 @@ For robust MCP authoring in this codebase:
 - [`src/mcp/config-writer.ts`](../packages/coding-agent/src/mcp/config-writer.ts)
 - [`src/mcp/tool-bridge.ts`](../packages/coding-agent/src/mcp/tool-bridge.ts)
 - [`src/discovery/mcp-json.ts`](../packages/coding-agent/src/discovery/mcp-json.ts)
-- [`src/modes/controllers/mcp-command-controller.ts`](../packages/coding-agent/src/modes/controllers/mcp-command-controller.ts)
+- [`src/mcp/manager.ts`](../packages/coding-agent/src/mcp/manager.ts)
 - [`src/mcp/manager.ts`](../packages/coding-agent/src/mcp/manager.ts)
 - [`src/capability/index.ts`](../packages/coding-agent/src/capability/index.ts)
 - [`src/config/resolve-config-value.ts`](../packages/coding-agent/src/config/resolve-config-value.ts)

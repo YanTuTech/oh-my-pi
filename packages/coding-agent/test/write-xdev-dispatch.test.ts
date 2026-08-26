@@ -5,16 +5,13 @@ import * as path from "node:path";
 import { type } from "@oh-my-pi/omptype";
 import type { AgentTool } from "@oh-my-pi/pi-agent-core";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import * as themeModule from "@oh-my-pi/pi-coding-agent/modes/theme/theme";
 import { ToolChoiceQueue } from "@oh-my-pi/pi-coding-agent/session/tool-choice-queue";
 import { createTools, type Tool, type ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
 import { requiresApproval, resolveApproval } from "@oh-my-pi/pi-coding-agent/tools/approval";
-import { githubToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/gh-renderer";
 import { ToolError } from "@oh-my-pi/pi-coding-agent/tools/tool-errors";
-import { WriteTool, writeToolRenderer } from "@oh-my-pi/pi-coding-agent/tools/write";
+import { WriteTool } from "@oh-my-pi/pi-coding-agent/tools/write";
 import {
 	listXdevTools,
-	resolveMountedXdevTool,
 	XDEV_DOCS_PER_DEVICE_CAP,
 	XDEV_DOCS_TOTAL_BUDGET,
 	XDEV_EXTERNAL_DESCRIPTION_CAP,
@@ -296,84 +293,12 @@ describe("read and write route xd:// device URLs", () => {
 		}
 	});
 
-	it("renderCall withholds a partial xd:// URL, then queues until execution starts", async () => {
-		await themeModule.initTheme();
-		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
-		if (!uiTheme) throw new Error("expected an initialized theme");
-		const options = { expanded: false, isPartial: true };
-
-		const content = JSON.stringify({
-			ops: [{ pat: "legacyWrap($A, $B)", out: "modernWrap($A, $B)" }],
-			paths: ["/tmp/legacy.ts"],
-		});
-
-		// Path still streaming (no content field yet): render nothing so the user
-		// never sees a half-typed "xd://ast_" frame.
-		expect(writeToolRenderer.renderCall({ path: "xd://ast_e" }, options, uiTheme)).toBeUndefined();
-
-		// Path settled + content streaming, but the write has not executed yet:
-		// show a queued card instead of the inner tool's in-flight renderer.
-		const queued = writeToolRenderer.renderCall({ path: "xd://ast_edit", content }, options, uiTheme);
-		expect(queued).toBeDefined();
-		const queuedText = Bun.stripANSI(queued!.render(80).join("\n"));
-		expect(queuedText).toContain("queued");
-		expect(queuedText).toContain("ast_edit");
-
-		// Args can be final at message_end while an earlier exclusive write still
-		// runs — keep the queued card until this call's tool_execution_start.
-		const argsCompleteOnly = writeToolRenderer.renderCall(
-			{ path: "xd://ast_edit", content },
-			{ ...options, argsComplete: true },
-			uiTheme,
-		);
-		expect(Bun.stripANSI(argsCompleteOnly!.render(80).join("\n"))).toContain("queued");
-
-		// Same payload after tool_execution_start: delegate to the inner renderer
-		// instead of throwing ReferenceError inside a generic Write frame.
-		const executing = writeToolRenderer.renderCall(
-			{ path: "xd://ast_edit", content },
-			{ ...options, argsComplete: true, executionStarted: true },
-			uiTheme,
-		);
-		expect(executing).toBeDefined();
-		const executingText = Bun.stripANSI(executing!.render(80).join("\n"));
-		expect(executingText).not.toContain("queued");
-	});
-
-	it("renders streamed MCP device writes as queued until execution starts", async () => {
-		await themeModule.initTheme();
-		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
-		if (!uiTheme) throw new Error("expected an initialized theme");
-		const content = JSON.stringify({
-			action: "grep_all",
-			pattern: "Broken",
-			scope: "game.StarterPlayer",
-			studio: "AED Content Development",
-			maxResults: 20,
-		});
-		const queued = writeToolRenderer.renderCall(
-			{ path: "xd://mcp__ecoport_search", content },
-			{ expanded: false, isPartial: true },
-			uiTheme,
-		);
-		expect(queued).toBeDefined();
-		const queuedText = Bun.stripANSI(queued!.render(120).join("\n"));
-		expect(queuedText).toContain("queued");
-		expect(queuedText).toContain("ecoport/search");
-		expect(queuedText).toContain("Broken");
-	});
-
-	it("renders device execution errors as the mounted tool instead of write", async () => {
-		await themeModule.initTheme();
-		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
-		if (!uiTheme) throw new Error("expected an initialized theme");
-
+	it("preserves mounted-tool metadata for device execution errors", async () => {
 		const githubDevice = {
 			name: "github",
 			label: "GitHub",
 			description: "fixture",
 			parameters: type({ op: "string" }),
-			...githubToolRenderer,
 			async execute() {
 				throw new ToolError("gh: Not Found (HTTP 404)");
 			},
@@ -389,65 +314,6 @@ describe("read and write route xd:// device URLs", () => {
 			mode: "execute",
 			args: { op: "repo_view" },
 		});
-
-		const component = writeToolRenderer.renderResult(
-			result,
-			{
-				expanded: false,
-				isPartial: false,
-				renderContext: { resolveXdevMounted: name => resolveMountedXdevTool(xdev, name) },
-			},
-			uiTheme,
-			{ path: "xd://github", content },
-		);
-		const rendered = Bun.stripANSI(component.render(80).join("\n"));
-		expect(rendered).toContain("GitHub Repo");
-		expect(rendered).toContain("gh: Not Found (HTTP 404)");
-		expect(rendered).not.toContain("Write");
-	});
-
-	it("keeps the generic custom-tool card when a mounted device has no renderer", async () => {
-		await themeModule.initTheme();
-		const uiTheme = (await themeModule.getThemeByName("dark")) ?? (await themeModule.getThemeByName("light"));
-		if (!uiTheme) throw new Error("expected an initialized theme");
-
-		const weatherDevice: AgentTool = {
-			name: "weather",
-			label: "Weather",
-			description: "Gets the weather",
-			parameters: type({ query: "string" }),
-			async execute() {
-				return { content: [{ type: "text", text: "Tokyo: 22°C" }] };
-			},
-		};
-		const xdev = createTestXdevState([weatherDevice]);
-		const write = new WriteTool(xdevSession(process.cwd(), { xdev }));
-		const content = JSON.stringify({ query: "Tokyo" });
-		const result = await write.execute("write-xdev-default-renderer", {
-			path: "xd://weather",
-			content,
-		});
-
-		const component = writeToolRenderer.renderResult(
-			result,
-			{
-				expanded: false,
-				isPartial: false,
-				renderContext: { resolveXdevMounted: name => resolveMountedXdevTool(xdev, name) },
-			},
-			uiTheme,
-			{ path: "xd://weather", content },
-		);
-		const lines = component.render(80);
-		const rendered = Bun.stripANSI(lines.join("\n"));
-		const backgroundProbe = uiTheme.bg("toolSuccessBg", "|");
-		const backgroundPrefix = backgroundProbe.slice(0, backgroundProbe.indexOf("|"));
-
-		expect(rendered).toContain("Weather");
-		expect(rendered).toContain('query="Tokyo"');
-		expect(rendered).toContain("Tokyo: 22°C");
-		expect(backgroundPrefix).not.toBe("");
-		expect(lines.some(line => line.includes(backgroundPrefix))).toBe(true);
 	});
 
 	// Dynamic device summaries are third-party text inlined into the system

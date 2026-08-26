@@ -8,10 +8,10 @@ import type {
 	Context,
 	Model,
 } from "@oh-my-pi/pi-ai";
-import type { BenchModelRegistry } from "@oh-my-pi/pi-coding-agent/cli/bench-runtime";
-import { runIfBenchCommand } from "@oh-my-pi/pi-coding-agent/if-bench";
+import { runIfBench } from "@oh-my-pi/pi-coding-agent/if-bench";
 import { applyActions, initialArray, makeActions } from "@oh-my-pi/pi-coding-agent/if-bench/actions";
 import { assessResponse, buildTurnPrompt } from "@oh-my-pi/pi-coding-agent/if-bench/protocol";
+import type { BenchModelRegistry, StreamSimpleFn } from "@oh-my-pi/pi-coding-agent/if-bench/runtime-types";
 
 const LENGTH = 24;
 const NYA_MAX = 8;
@@ -74,30 +74,37 @@ interface CapturedTurn {
 	prompt: string;
 }
 
-/** Drive the command with a scripted reply per turn; the reply may be built from the turn's expected array. */
-async function runScripted(reply: (turn: number, expected: string) => string, flags: Record<string, unknown> = {}) {
+function runBench(
+	stream: StreamSimpleFn,
+	options: { turns?: number; randomSessionId?: () => string; sleep?: (ms: number) => Promise<void> } = {},
+) {
+	return runIfBench({
+		targets: [{ selector: "acme/if-bench-model", model, thinking: undefined }],
+		runtime: { modelRegistry: registry },
+		maxTurns: options.turns ?? 4,
+		arrayLength: LENGTH,
+		nyaMax: NYA_MAX,
+		maxTokens: 32_768,
+		par: 1,
+		stream,
+		now: () => 0,
+		randomSessionId: options.randomSessionId ?? (() => "sess-0"),
+		sleep: options.sleep,
+	});
+}
+
+/** Drive the engine with a scripted reply per turn; the reply may be built from the turn's expected array. */
+async function runScripted(reply: (turn: number, expected: string) => string, options: { turns?: number } = {}) {
 	const captured: CapturedTurn[] = [];
-	const summary = await runIfBenchCommand(
-		{ models: ["acme/if-bench-model"], flags: { turns: 4, par: 1, ...flags } },
-		{
-			createRuntime: async () => ({ modelRegistry: registry, close: () => {} }),
-			randomSessionId: () => "sess-0",
-			writeStdout: () => {},
-			writeStderr: () => {},
-			setExitCode: () => {},
-			now: () => 0,
-			stdoutIsTTY: false,
-			streamSimple: (_model, context) => {
-				const turn = captured.length + 1;
-				const last = context.messages[context.messages.length - 1];
-				captured.push({
-					messages: [...context.messages],
-					prompt: typeof last?.content === "string" ? last.content : "",
-				});
-				return replyStream(reply(turn, perfectResult(turn)));
-			},
-		},
-	);
+	const summary = await runBench((_model, context) => {
+		const turn = captured.length + 1;
+		const last = context.messages[context.messages.length - 1];
+		captured.push({
+			messages: [...context.messages],
+			prompt: typeof last?.content === "string" ? last.content : "",
+		});
+		return replyStream(reply(turn, perfectResult(turn)));
+	}, options);
 	return { summary, captured };
 }
 
@@ -200,26 +207,16 @@ describe("if-bench run", () => {
 		// The Anthropic cyber classifier refuses stochastically near the threshold;
 		// the first attempt refuses, the retry answers, and the turn must pass.
 		let attempts = 0;
-		const summary = await runIfBenchCommand(
-			{ models: ["acme/if-bench-model"], flags: { turns: 2, par: 1 } },
-			{
-				createRuntime: async () => ({ modelRegistry: registry, close: () => {} }),
-				randomSessionId: () => `sess-${crypto.randomUUID()}`,
-				sleep: () => Promise.resolve(),
-				writeStdout: () => {},
-				writeStderr: () => {},
-				setExitCode: () => {},
-				now: () => 0,
-				stdoutIsTTY: false,
-				streamSimple: (_m, context) => {
-					attempts += 1;
-					// Turn number == user messages so far; turn 1's first attempt refuses.
-					const turn = context.messages.filter(m => m.role === "user").length;
-					return attempts === 1
-						? errorStream("Refusal (cyber): This request triggered restrictions on violative cyber content")
-						: replyStream(`<${perfectResult(turn)}> nya`);
-				},
+		const summary = await runBench(
+			(_m, context) => {
+				attempts += 1;
+				// Turn number == user messages so far; turn 1's first attempt refuses.
+				const turn = context.messages.filter(m => m.role === "user").length;
+				return attempts === 1
+					? errorStream("Refusal (cyber): This request triggered restrictions on violative cyber content")
+					: replyStream(`<${perfectResult(turn)}> nya`);
 			},
+			{ turns: 2, randomSessionId: () => `sess-${crypto.randomUUID()}`, sleep: () => Promise.resolve() },
 		);
 		const report = summary.models[0]!;
 		expect(report.turns[0]!.passed).toBe(true);
@@ -228,41 +225,22 @@ describe("if-bench run", () => {
 	});
 
 	it("scores a run-ending provider failure only after the refusal budget is spent", async () => {
-		const summary = await runIfBenchCommand(
-			{ models: ["acme/if-bench-model"], flags: { turns: 1, par: 1 } },
-			{
-				createRuntime: async () => ({ modelRegistry: registry, close: () => {} }),
-				randomSessionId: () => "sess-x",
-				sleep: () => Promise.resolve(),
-				writeStdout: () => {},
-				writeStderr: () => {},
-				setExitCode: () => {},
-				now: () => 0,
-				stdoutIsTTY: false,
-				streamSimple: () => errorStream("Refusal (cyber): blocked"),
-			},
-		);
+		const summary = await runBench(() => errorStream("Refusal (cyber): blocked"), {
+			turns: 1,
+			randomSessionId: () => "sess-x",
+			sleep: () => Promise.resolve(),
+		});
 		const report = summary.models[0]!;
 		expect(report.turnsPassed).toBe(0);
 		expect(report.failure).toMatchObject({ turn: 1, kind: "provider" });
 	});
 
 	it("classifies a provider failure separately from a wrong answer", async () => {
-		const captured: string[] = [];
-		const summary = await runIfBenchCommand(
-			{ models: ["acme/if-bench-model"], flags: { turns: 2, par: 1 } },
-			{
-				createRuntime: async () => ({ modelRegistry: registry, close: () => {} }),
-				randomSessionId: () => "sess-0",
-				writeStdout: () => {},
-				writeStderr: text => captured.push(text),
-				setExitCode: () => {},
-				now: () => 0,
-				stdoutIsTTY: false,
-				streamSimple: () => {
-					throw new Error("upstream refused");
-				},
+		const summary = await runBench(
+			() => {
+				throw new Error("upstream refused");
 			},
+			{ turns: 2 },
 		);
 		const report = summary.models[0]!;
 		expect(report.turnsPassed).toBe(0);

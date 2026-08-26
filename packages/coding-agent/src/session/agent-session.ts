@@ -117,6 +117,7 @@ import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { getFileSnapshotStore } from "../edit/file-snapshot-store";
 import type { PythonResult } from "../eval/py/executor";
 import type { BashPtyOptions, BashResult } from "../exec/bash-executor";
+import { exportSessionToHtml } from "../export/html";
 import type { TtsrManager } from "../export/ttsr";
 import type { LoadedCustomCommand } from "../extensibility/custom-commands";
 import type { CustomTool } from "../extensibility/custom-tools/types";
@@ -147,6 +148,7 @@ import type { HookCommandContext } from "../extensibility/hooks/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import { expandSlashCommand, type FileSlashCommand } from "../extensibility/slash-commands";
 import { normalizeToolEventInput, resolveToolEventInput } from "../extensibility/tool-event-input";
+import type { Theme } from "../extensibility/ui-contract";
 import { GoalRuntime } from "../goals/runtime";
 import type { GoalModeState } from "../goals/state";
 import type { HindsightSessionState } from "../hindsight/state";
@@ -155,12 +157,10 @@ import type { IrcMessage } from "../irc/bus";
 import type { DaemonCompletionNotification } from "../launch/protocol";
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
-import { containsOrchestrate, renderOrchestrateNotice } from "../modes/orchestrate";
-import { theme } from "../modes/theme/theme";
+import { containsOrchestrate, renderOrchestrateNotice } from "../modes/orchestrate-runtime";
 import { parseTurnBudget } from "../modes/turn-budget";
-import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink";
-import { computeNonMessageTokens } from "../modes/utils/context-usage";
-import { containsWorkflow, renderWorkflowNotice } from "../modes/workflow";
+import { containsUltrathink, ULTRATHINK_NOTICE } from "../modes/ultrathink-runtime";
+import { containsWorkflow, renderWorkflowNotice } from "../modes/workflow-runtime";
 import { type PlanApprovalDetails, resolveApprovedPlan } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile } from "../plan-mode/plan-files";
 import type { PlanModeState } from "../plan-mode/state";
@@ -193,7 +193,6 @@ import {
 } from "../thinking";
 import { isLowSignalTitleInput } from "../tiny/text";
 import { shutdownTinyTitleClient } from "../tiny/title-client";
-import type { ImageAttachmentEntry } from "../tools";
 import { resolveApproval } from "../tools/approval";
 import { type AskToolDetails, type AskToolInput, recoverAskQuestions } from "../tools/ask";
 import { releaseTabsForOwner } from "../tools/browser/tab-supervisor";
@@ -208,6 +207,7 @@ import {
 	PROPOSE_DEVICE_NAME,
 	writeDeviceDispatch,
 } from "../tools/resolve";
+import type { ImageAttachmentEntry } from "../tools/runtime";
 import { supportsExternalThinking } from "../tools/think";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
@@ -274,6 +274,7 @@ import {
 	shouldEvaluateCodexAutoRedeem,
 	shouldPromptCodexAutoRedeem,
 } from "./codex-auto-reset";
+import { computeNonMessageTokens } from "./context-usage";
 import { recordCredentialPin, seedCredentialPins } from "./credential-pin";
 import { EvalRunner, type EvalRunnerHost } from "./eval-runner";
 import {
@@ -388,7 +389,7 @@ const noOpUIContext: ExtensionUIContext = {
 	editor: async () => undefined,
 	addAutocompleteProvider: () => {},
 	get theme() {
-		return theme;
+		return undefined as unknown as Theme;
 	},
 	getAllThemes: () => Promise.resolve([]),
 	getTheme: () => Promise.resolve(undefined),
@@ -3986,7 +3987,7 @@ export class AgentSession {
 	 * Call this when completely done with the session.
 	 *
 	 * Idempotent: concurrent or repeated calls share one settled promise. The
-	 * keypress `InteractiveMode.shutdown()` path and the postmortem
+	 * host shutdown path and the postmortem
 	 * `SIGTERM`/`SIGHUP`/`uncaughtException` callback can both target this
 	 * method, so a second invocation must never re-emit `session_shutdown` or
 	 * double-drain the owned `AsyncJobManager` (issue #4080).
@@ -6822,16 +6823,15 @@ export class AgentSession {
 	}
 
 	/** Currently-applied {@link TITLE_SYSTEM.md} override, or undefined when the
-	 *  bundled prompt is in effect. Consumed by {@link InteractiveMode} so the
-	 *  first-input title path and the replan refresh share one source. */
+	 *  bundled prompt is in effect. Exposed so host-driven title generation and
+	 *  replan refresh share one source. */
 	get titleSystemPrompt(): string | undefined {
 		return this.#titleSystemPrompt;
 	}
 
-	/** Replace the title-generation system prompt override. Called by
-	 *  {@link InteractiveMode.refreshTitleSystemPrompt} after the session cwd
-	 *  changes (e.g. `/move` relocation) so the next replan refresh resolves
-	 *  against the destination project's override. */
+	/** Replace the title-generation system prompt override after the session cwd
+	 *  changes so the next replan refresh resolves against the destination
+	 *  project's override. */
 	setTitleSystemPrompt(prompt: string | undefined): void {
 		this.#titleSystemPrompt = prompt;
 	}
@@ -9438,30 +9438,14 @@ export class AgentSession {
 			});
 	}
 
-	/**
-	 * Export session to HTML.
-	 * @param outputPath Optional output path
-	 * @param useUserThemes Bundle the dark and light TUI themes selected in settings
-	 */
-	async exportToHtml(outputPath?: string, useUserThemes = false): Promise<string> {
-		// Lazy import: the export module embeds the HTML template and pre-built
-		// tool renderers as text; only `/export` should pay that load.
-		const { exportSessionToHtml } = await import("../export/html");
-		return exportSessionToHtml(this.sessionManager, this.state, {
-			outputPath,
-			palette: useUserThemes ? "theme" : "web",
-			themeNames: useUserThemes
-				? {
-						dark: this.settings.get("theme.dark") ?? "titanium",
-						light: this.settings.get("theme.light") ?? "light",
-					}
-				: undefined,
-		});
-	}
-
 	// =========================================================================
 	// Utilities
 	// =========================================================================
+
+	/** Export this persisted session through the headless HTML viewer. */
+	async exportToHtml(outputPath?: string): Promise<string> {
+		return exportSessionToHtml(this.sessionManager, this.state, { outputPath });
+	}
 
 	/**
 	 * Get text content of last assistant message.

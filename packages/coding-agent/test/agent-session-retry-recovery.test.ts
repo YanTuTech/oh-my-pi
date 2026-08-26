@@ -2,16 +2,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import * as path from "node:path";
 import { scheduler } from "node:timers/promises";
 import { Agent } from "@oh-my-pi/pi-agent-core";
-import type { ApiKeyResolveContext, AssistantMessage, AssistantRetryRecovery, Usage } from "@oh-my-pi/pi-ai";
+import type { ApiKeyResolveContext, AssistantMessage } from "@oh-my-pi/pi-ai";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import * as aiStream from "@oh-my-pi/pi-ai/stream";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { resolveAssistantErrorPresentation } from "@oh-my-pi/pi-coding-agent/modes/utils/transcript-render-helpers";
 import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
-import { SILENT_ABORT_MARKER } from "@oh-my-pi/pi-coding-agent/session/messages";
 import type { SessionMessageEntry } from "@oh-my-pi/pi-coding-agent/session/session-entries";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@oh-my-pi/pi-utils";
@@ -28,48 +26,6 @@ type RecoveryRun = {
 const RATE_LIMIT_ERROR =
 	'429 {"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account\'s rate limit. Please try again later."}} retry-after-ms=11180000';
 const RETRIABLE_SERVER_ERROR = "503 service unavailable: overloaded_error";
-
-function emptyUsage(): Usage {
-	return {
-		input: 0,
-		output: 0,
-		cacheRead: 0,
-		cacheWrite: 0,
-		totalTokens: 0,
-		cost: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-			total: 0,
-		},
-	};
-}
-
-function assistantMessage(overrides: Partial<AssistantMessage>): AssistantMessage {
-	return {
-		role: "assistant",
-		content: [],
-		api: "anthropic-messages",
-		provider: "anthropic",
-		model: "claude-sonnet-4-5",
-		usage: emptyUsage(),
-		stopReason: "stop",
-		timestamp: 1,
-		...overrides,
-	};
-}
-
-function retryRecovery(recovery: AssistantRetryRecovery["recovery"], note: string): AssistantRetryRecovery {
-	return {
-		kind: "auto-retry",
-		status: "recovered",
-		attempt: 1,
-		recoveredAt: "2026-07-04T00:00:00.000Z",
-		recovery,
-		note,
-	};
-}
 
 function resolveInitialApiKey(
 	apiKey: string | ((ctx: ApiKeyResolveContext) => string | Promise<string | undefined> | undefined) | undefined,
@@ -337,7 +293,6 @@ describe("AgentSession retry recovery", () => {
 		const errors = assistantEntries(sessionManager).filter(candidate => candidate.message.stopReason === "error");
 		expect(errors).toHaveLength(2);
 		expect(errors[0].message.retryRecovery).toMatchObject({ status: "superseded", attempt: 1 });
-		expect(resolveAssistantErrorPresentation(errors[0].message)).toEqual({ kind: "none" });
 
 		const terminalError = errors[1].message;
 		const terminalErrorText = terminalError.errorMessage;
@@ -346,53 +301,7 @@ describe("AgentSession retry recovery", () => {
 		}
 		expect(terminalError.retryRecovery).toBeUndefined();
 		expect(terminalErrorText).toBe(`Retry budget exhausted after 1 retry: ${RETRIABLE_SERVER_ERROR}`);
-		expect(resolveAssistantErrorPresentation(terminalError)).toEqual({
-			kind: "full",
-			text: terminalErrorText,
-			isError: true,
-		});
-
-		const visibleErrors = errors
-			.map(candidate => resolveAssistantErrorPresentation(candidate.message))
-			.filter(presentation => presentation.kind !== "none");
-		expect(visibleErrors).toHaveLength(1);
 		expect(sessionManager.buildSessionContext().messages.map(message => message.role)).toEqual(["user"]);
-	});
-
-	it("maps assistant error presentation for recovered, unrecovered, and silent abort turns", () => {
-		const recoveredCases: Array<{
-			name: string;
-			recovery: AssistantRetryRecovery["recovery"];
-			note: string;
-		}> = [
-			{ name: "credential", recovery: "credential", note: "rate-limited; switched account; retried" },
-			{ name: "model", recovery: "model", note: "rate-limited; switched model; retried" },
-			{ name: "wait", recovery: "wait", note: "rate-limited; waited; retried" },
-			{ name: "plain", recovery: "plain", note: "error; retried" },
-		];
-
-		for (const testCase of recoveredCases) {
-			expect(
-				resolveAssistantErrorPresentation(
-					assistantMessage({
-						stopReason: "error",
-						errorMessage: `${testCase.name} retry was superseded`,
-						retryRecovery: retryRecovery(testCase.recovery, testCase.note),
-					}),
-				),
-			).toEqual({ kind: "compact-recovered", text: testCase.note, isError: false });
-		}
-
-		expect(
-			resolveAssistantErrorPresentation(
-				assistantMessage({ stopReason: "error", errorMessage: "503 service unavailable" }),
-			),
-		).toEqual({ kind: "full", text: "503 service unavailable", isError: true });
-		expect(
-			resolveAssistantErrorPresentation(
-				assistantMessage({ stopReason: "aborted", errorMessage: SILENT_ABORT_MARKER }),
-			),
-		).toEqual({ kind: "none" });
 	});
 
 	it("keeps recovered markers durable across session reload and still excludes them from model context", async () => {

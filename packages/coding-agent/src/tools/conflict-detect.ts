@@ -18,7 +18,7 @@
  * merely start with `<` or `=` never match.
  */
 
-import type { ToolSession } from "./index";
+import type { ToolSession } from "./runtime";
 import { ToolError } from "./tool-errors";
 
 const OURS_PREFIX = "<<<<<<<";

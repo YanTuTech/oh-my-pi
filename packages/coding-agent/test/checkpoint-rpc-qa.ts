@@ -37,7 +37,6 @@ async function main() {
 	const sessionDir = path.join(os.tmpdir(), `omp-checkpoint-rpc-qa-${Date.now()}`);
 	const projectRoot = path.join(import.meta.dir, "..");
 	const client = new RpcClient({
-		cliPath: path.join(projectRoot, "src/cli.ts"),
 		cwd: projectRoot,
 		env: { PI_CODING_AGENT_DIR: sessionDir },
 		args: ["--no-color"],

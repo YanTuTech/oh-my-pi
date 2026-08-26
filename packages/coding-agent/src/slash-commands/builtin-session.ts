@@ -1,5 +1,4 @@
 import { getOAuthProviders } from "@oh-my-pi/pi-ai/oauth";
-import { settings } from "../config/settings";
 import type { AgentSession } from "../session/agent-session";
 import type { SessionOAuthAccountList } from "../session/agent-session-types";
 import {
@@ -8,17 +7,15 @@ import {
 	RECENT_CHANGELOG_ENTRY_LIMIT,
 	renderChangelogEntries,
 } from "../utils/changelog";
-import { formatTokenCount, refreshStatusLine } from "./builtin-modes";
 import { buildContextReportText } from "./helpers/context-report";
 import { formatDuration } from "./helpers/format";
 import { handleMcpAcp } from "./helpers/mcp";
 import { commandConsumed, errorMessage, parseSubcommand, usage } from "./helpers/parse";
 import { describeRedeemOutcome, type ResetUsageAccount, toResetUsageAccounts } from "./helpers/reset-usage";
 import { matchSessionPinAccounts, toSessionPinAccounts } from "./helpers/session-pin";
-import { launchStatsDashboard, parseStatsDashboardArgs } from "./helpers/stats-dashboard";
 import { handleTodoAcp } from "./helpers/todo";
 import { buildUsageReportText } from "./helpers/usage-report";
-import type { SlashCommandRuntime, SlashCommandSpec } from "./types";
+import type { SlashCommandRuntime, SlashCommandSpec } from "./runtime-types";
 
 async function handleUsageResetCommand(
 	arg: string,
@@ -140,7 +137,6 @@ async function handleSessionPinCommand(
 export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 	{
 		name: "todo",
-		icon: "todo",
 		description: "View or modify the agent's todo list",
 		acpDescription: "Manage todos",
 		acpInputHint: "<subcommand>",
@@ -162,23 +158,10 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			{ name: "rm", description: "Remove task/phase/all (fuzzy-matched)", usage: "[<task|phase>]" },
 		],
 		allowArgs: true,
-		getTuiAutocompleteDescription: runtime => {
-			const tasks = runtime.ctx.todoPhases.flatMap(phase => phase.tasks);
-			if (tasks.length === 0) return "Todos: none";
-			const pending = tasks.filter(task => task.status === "pending").length;
-			const inProgress = tasks.filter(task => task.status === "in_progress").length;
-			const completed = tasks.filter(task => task.status === "completed").length;
-			return `Todos: ${pending + inProgress} open (${inProgress} in progress, ${completed} done)`;
-		},
 		handle: handleTodoAcp,
-		handleTui: async (command, runtime) => {
-			await runtime.ctx.handleTodoCommand(command.args);
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "session",
-		icon: "session",
 		description: "Session management commands",
 		acpDescription: "Show or configure the current session",
 		acpInputHint: "[info|delete|pin [account]]",
@@ -229,41 +212,11 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			}
 			return usage("Usage: /session [info|delete|pin [account]]", runtime);
 		},
-		handleTui: async (command, runtime) => {
-			const { verb, rest } = parseSubcommand(command.args);
-			if (verb === "delete" && !rest) {
-				runtime.ctx.editor.setText("");
-				await runtime.ctx.handleSessionDeleteCommand();
-				return;
-			}
-			if (verb === "pin") {
-				if (rest) {
-					await handleSessionPinCommand(rest, runtime.ctx.session, text => runtime.ctx.showStatus(text));
-					refreshStatusLine(runtime.ctx);
-				} else {
-					await runtime.ctx.showSessionPinSelector();
-				}
-				runtime.ctx.editor.setText("");
-				return;
-			}
-			if (!verb || (verb === "info" && !rest)) {
-				await runtime.ctx.handleSessionCommand();
-			} else {
-				runtime.ctx.showStatus("Usage: /session [info|delete|pin [account]]");
-			}
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "jobs",
-		icon: "jobs",
 		description: "Show async background jobs status",
 		acpDescription: "Show background jobs",
-		getTuiAutocompleteDescription: runtime => {
-			const snapshot = runtime.ctx.session.getAsyncJobSnapshot({ recentLimit: 5 });
-			if (!snapshot || (snapshot.running.length === 0 && snapshot.recent.length === 0)) return "Jobs: none";
-			return `Jobs: ${snapshot.running.length} running, ${snapshot.recent.length} recent`;
-		},
 		handle: async (_command, runtime) => {
 			const snapshot = runtime.session.getAsyncJobSnapshot({ recentLimit: 5 });
 			if (!snapshot || (snapshot.running.length === 0 && snapshot.recent.length === 0)) {
@@ -291,14 +244,9 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			await runtime.output(lines.join("\n"));
 			return commandConsumed();
 		},
-		handleTui: async (_command, runtime) => {
-			await runtime.ctx.handleJobsCommand();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "usage",
-		icon: "gauge",
 		description: "Show provider usage and limits",
 		acpDescription: "Show token usage",
 		acpInputHint: "[show|reset [account|active]]",
@@ -319,49 +267,9 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			}
 			return usage("Usage: /usage [show|reset [account|active]]", runtime);
 		},
-		handleTui: async (command, runtime) => {
-			const { verb, rest } = parseSubcommand(command.args);
-			if (!verb || (verb === "show" && !rest)) {
-				await runtime.ctx.handleUsageCommand();
-				runtime.ctx.editor.setText("");
-				return;
-			}
-			if (verb === "reset") {
-				if (rest) {
-					await handleUsageResetCommand(rest, runtime.ctx.session, text => runtime.ctx.showStatus(text));
-				} else {
-					await runtime.ctx.showResetUsageSelector();
-				}
-				runtime.ctx.editor.setText("");
-				return;
-			}
-			runtime.ctx.showStatus("Usage: /usage [show|reset [account|active]]");
-			runtime.ctx.editor.setText("");
-		},
-	},
-	{
-		name: "stats",
-		icon: "stats",
-		description: "Launch the local stats dashboard",
-		inlineHint: "[--port <port>] [--host <host>]",
-		allowArgs: true,
-		handle: async (command, runtime) => {
-			const parsed = parseStatsDashboardArgs(command.args);
-			if ("error" in parsed) return usage(parsed.error, runtime);
-
-			await runtime.output("Syncing session files...");
-			try {
-				const result = await launchStatsDashboard(parsed);
-				await runtime.output(result.message);
-			} catch (error) {
-				await runtime.output(`Stats dashboard failed: ${errorMessage(error)}`);
-			}
-			return commandConsumed();
-		},
 	},
 	{
 		name: "changelog",
-		icon: "news",
 		description: "Show changelog entries",
 		acpDescription: "Show changelog",
 		acpInputHint: "[full]",
@@ -379,31 +287,15 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			await runtime.output(renderChangelogEntries(entriesToShow).markdown);
 			return commandConsumed();
 		},
-		handleTui: async (command, runtime) => {
-			const showFull = command.args.split(/\s+/).filter(Boolean).includes("full");
-			await runtime.ctx.handleChangelogCommand(showFull);
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "hotkeys",
-		icon: "keyboard",
 		description: "Show all keyboard shortcuts",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.handleHotkeysCommand();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "tools",
-		icon: "tools",
 		description: "Show tools currently visible to the agent",
 		acpDescription: "Show available tools",
-		getTuiAutocompleteDescription: runtime => {
-			const active = runtime.ctx.session.getActiveToolNames().length;
-			const all = runtime.ctx.session.getAllToolNames().length;
-			return all === 0 ? "Tools: none available" : `Tools: ${active} active / ${all} available`;
-		},
 		handle: async (_command, runtime) => {
 			const active = runtime.session.getActiveToolNames();
 			const all = runtime.session.getAllToolNames();
@@ -418,170 +310,57 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 			await runtime.output(lines.join("\n"));
 			return commandConsumed();
 		},
-		handleTui: (_command, runtime) => {
-			runtime.ctx.handleToolsCommand();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "context",
-		icon: "context",
 		description: "Show estimated context usage breakdown",
 		acpDescription: "Show context usage",
-		getTuiAutocompleteDescription: runtime => {
-			const usage = runtime.ctx.session.getContextUsage();
-			if (!usage) return "Context: unavailable";
-			return `Context: ${Math.round(usage.percent)}% (${formatTokenCount(usage.tokens)}/${formatTokenCount(usage.contextWindow)})`;
-		},
 		handle: async (_command, runtime) => {
 			await runtime.output(buildContextReportText(runtime));
 			return commandConsumed();
-		},
-		handleTui: (_command, runtime) => {
-			runtime.ctx.handleContextCommand();
-			runtime.ctx.editor.setText("");
 		},
 	},
 	{
 		name: "extensions",
 		aliases: ["status"],
-		icon: "extension",
 		description: "Open Extension Control Center dashboard",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.showExtensionsDashboard();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "agents",
-		icon: "agents",
 		description: "Open the agents hub (per-agent model, prewalk, and advisor)",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.showAgentsDashboard();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "git",
-		icon: "branch",
 		description: "Open the git UI (split diff viewer, staging, commit composer)",
 		inlineHint: "[revision]",
 		allowArgs: true,
-		handleTui: (command, runtime) => {
-			runtime.ctx.showGitUi(command.args.trim() || undefined);
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "branch",
-		icon: "branch",
 		description: "Create a new branch from a previous message",
-		handleTui: (_command, runtime) => {
-			if (settings.get("doubleEscapeAction") === "tree") {
-				runtime.ctx.showTreeSelector();
-			} else {
-				runtime.ctx.showUserMessageSelector();
-			}
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "fork",
-		icon: "branch",
 		description: "Create a new fork from a previous message",
-		handleTui: async (_command, runtime) => {
-			runtime.ctx.editor.setText("");
-			await runtime.ctx.handleForkCommand();
-		},
 	},
 	{
 		name: "tree",
-		icon: "tree",
 		description: "Navigate session tree (switch branches)",
-		handleTui: (_command, runtime) => {
-			runtime.ctx.showTreeSelector();
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "login",
-		icon: "signIn",
 		description: "Login with OAuth provider",
 		inlineHint: "[provider|redirect URL]",
 		allowArgs: true,
-		getTuiAutocompleteDescription: runtime =>
-			runtime.ctx.oauthManualInput.hasPending()
-				? `Login: waiting for ${runtime.ctx.oauthManualInput.pendingProviderId ?? "OAuth"} callback`
-				: "Login: choose provider",
-		handleTui: (command, runtime) => {
-			const manualInput = runtime.ctx.oauthManualInput;
-			const args = command.args.trim();
-			if (args.length > 0) {
-				const matchedProvider = getOAuthProviders().find(provider => provider.id === args);
-				if (matchedProvider) {
-					if (manualInput.hasPending()) {
-						const pendingProvider = manualInput.pendingProviderId;
-						const message = pendingProvider
-							? `OAuth login already in progress for ${pendingProvider}. Paste the redirect URL with /login <url>.`
-							: "OAuth login already in progress. Paste the redirect URL with /login <url>.";
-						runtime.ctx.showWarning(message);
-						runtime.ctx.editor.setText("");
-						return;
-					}
-					void runtime.ctx.showOAuthSelector("login", matchedProvider.id);
-					runtime.ctx.editor.setText("");
-					return;
-				}
-				const submitted = manualInput.submit(args);
-				if (submitted) {
-					runtime.ctx.showStatus("OAuth callback received; completing login…");
-				} else {
-					runtime.ctx.showWarning("No OAuth login is waiting for a manual callback.");
-				}
-				runtime.ctx.editor.setText("");
-				return;
-			}
-
-			if (manualInput.hasPending()) {
-				const provider = manualInput.pendingProviderId;
-				const message = provider
-					? `OAuth login already in progress for ${provider}. Paste the redirect URL with /login <url>.`
-					: "OAuth login already in progress. Paste the redirect URL with /login <url>.";
-				runtime.ctx.showWarning(message);
-				runtime.ctx.editor.setText("");
-				return;
-			}
-
-			void runtime.ctx.showOAuthSelector("login");
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "logout",
-		icon: "signOut",
 		description: "Logout from OAuth provider",
 		inlineHint: "[provider]",
 		allowArgs: true,
-		handleTui: (command, runtime) => {
-			const providerId = command.args.trim();
-			if (providerId) {
-				const matchedProvider = getOAuthProviders().find(provider => provider.id === providerId);
-				if (!matchedProvider) {
-					runtime.ctx.showWarning(`Unknown OAuth provider: ${providerId}`);
-					runtime.ctx.editor.setText("");
-					return;
-				}
-				void runtime.ctx.showOAuthSelector("logout", matchedProvider.id);
-				runtime.ctx.editor.setText("");
-				return;
-			}
-			void runtime.ctx.showOAuthSelector("logout");
-			runtime.ctx.editor.setText("");
-		},
 	},
 	{
 		name: "mcp",
-		icon: "mcp",
 		description: "Manage MCP servers (add, list, remove, test)",
 		acpDescription: "Manage MCP servers",
 		inlineHint: "<subcommand>",
@@ -614,9 +393,5 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		],
 		allowArgs: true,
 		handle: handleMcpAcp,
-		handleTui: async (command, runtime) => {
-			runtime.ctx.editor.setText("");
-			await runtime.ctx.handleMCPCommand(command.text);
-		},
 	},
 ];

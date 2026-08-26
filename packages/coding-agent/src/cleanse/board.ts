@@ -12,7 +12,6 @@
  */
 import { formatDuration, formatNumber, sanitizeText } from "@oh-my-pi/pi-utils";
 import chalk from "@oh-my-pi/pi-utils/chalk";
-import { createLiveBoard, type LiveBoardOutput } from "../cli/live-board";
 import type { AgentProgress } from "../task/types";
 import type { CleanseCheckerDescriptor } from "./checkers";
 import type { CleanseAgentOutcome, CleanseAssignment, CleanseCheckResult } from "./types";
@@ -136,65 +135,6 @@ export class CleanseBoardModel {
 		}
 		return lines;
 	}
-}
-
-/** Create the cleanse status board bound to `output` (default `process.stdout`). */
-export function createCleanseStatusBoard(
-	output: LiveBoardOutput = process.stdout,
-	errors: LiveBoardOutput = process.stderr,
-): CleanseStatusBoard {
-	const model = new CleanseBoardModel();
-	const board = createLiveBoard(spinner => model.renderLive(spinner), output);
-
-	return {
-		interactive: board.interactive,
-		log: board.log,
-		phase(text) {
-			if (!board.interactive) {
-				if (text) output.write(`${text}\n`);
-				return;
-			}
-			model.phase(text);
-			board.repaint();
-		},
-		checkerStarted(checker) {
-			if (!board.interactive) return;
-			model.checkerStarted(checker);
-			board.repaint();
-		},
-		checkerFinished(check, durationMs) {
-			board.log(model.checkerFinished(check, durationMs));
-		},
-		repairFinished() {
-			model.repairFinished();
-			board.repaint();
-		},
-		agentStarted(name, assignment) {
-			if (!board.interactive) {
-				const files = assignment.groups.map(group => group.file ?? "<project>").join(", ");
-				output.write(`[start] ${name}: ${files} (weight ${assignment.weight})\n`);
-				return;
-			}
-			model.agentStarted(name, assignment);
-			board.repaint();
-		},
-		agentProgress(name, progress) {
-			model.agentProgress(name, progress);
-		},
-		agentFinished(outcome, assignment) {
-			if (!board.interactive) {
-				model.agentFinished(outcome, assignment);
-				if (outcome.success) {
-					output.write(`[done] ${outcome.name}${outcome.resolvedModel ? ` (${outcome.resolvedModel})` : ""}\n`);
-				} else {
-					errors.write(`[fail] ${outcome.name}: ${oneLine(outcome.error ?? "subagent failed", ERROR_WIDTH)}\n`);
-				}
-				return;
-			}
-			board.log(model.agentFinished(outcome, assignment));
-		},
-		close: board.close,
-	};
 }
 
 function renderWaveHeader(

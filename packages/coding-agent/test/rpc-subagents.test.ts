@@ -423,7 +423,7 @@ function handle(frame) {
 `,
 		);
 
-		using client = new RpcClient({ cliPath: scriptPath });
+		using client = new RpcClient({ rpcHostPath: scriptPath });
 		const lifecycleIds: string[] = [];
 		const progressTasks: string[] = [];
 		const rawEventTypes: string[] = [];

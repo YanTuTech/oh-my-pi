@@ -70,7 +70,6 @@ python/omp-rpc/src/omp_rpc.egg-info/
 python/robomp/data/
 python/robomp/.cache/
 python/robomp/src/robomp/static/
-python/robomp/web/dist/
 
 # Scratch files the repo creates ad-hoc.
 syntax.jsonl
@@ -87,7 +86,6 @@ pi-*.html
 
 # Robomp-only excludes. Natives + wheel + python + bun + rustup all come
 # from PI_BASE; the web-builder stage only needs root manifests + the
-# python/robomp/web tree; the runtime stage only COPYs python/robomp/
 # pyproject + src + entrypoint. Everything below is dead weight in the
 # robomp build context.
 crates/

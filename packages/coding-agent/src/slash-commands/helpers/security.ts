@@ -14,7 +14,7 @@ import type { SecurityTargetRequest } from "../../security/preflight";
 import { SecurityStore, writeSecurityFileAtomic } from "../../security/store";
 import { shortenPath } from "../../tools/render-utils";
 import { parseCommandArgs } from "../../utils/command-args";
-import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../types";
+import type { ParsedSlashCommand, SlashCommandResult, SlashCommandRuntime } from "../runtime-types";
 import { commandConsumed, errorMessage, parseSubcommand, usage } from "./parse";
 
 interface SecurityPlanCliOptions {

@@ -1,4 +1,4 @@
-"""End-to-end coverage for the FastAPI surface (dashboard + JSON APIs)."""
+"""End-to-end coverage for the headless FastAPI surface."""
 
 from __future__ import annotations
 
@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from robomp.config import Settings, reset_settings_cache
-from robomp.dashboard import tail_jsonl
 from robomp.db import Database, close_database, get_database, issue_key
 from robomp.github_client import GitHubClient
+from robomp.log_tail import tail_jsonl
 from robomp.manual_triage import InvalidIssueRef, ManualTriageTimeout, await_terminal_state, parse_issue_ref
 from robomp.sandbox import LocalGitTransport
 from robomp.server import create_app
@@ -65,41 +65,6 @@ def _seed_db(settings: Settings) -> None:
         session_dir="/tmp/release-session",
     )
     db.bump_release_round(release.key, failed_sha=release.current_sha)
-
-
-def test_index_serves_dashboard_html(settings: Settings) -> None:
-    app = create_app(settings)
-    with TestClient(app) as client:
-        resp = client.get("/")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    # Stable anchors only. The Vite bundle hashes its asset filenames on every
-    # build, but the structural skeleton (title, mount node, config script)
-    # has to stay intact for the SPA to bootstrap.
-    assert "<title>robomp</title>" in resp.text
-    assert 'id="app"' in resp.text
-    assert 'id="robomp-config"' in resp.text
-    # The sentinel must have been substituted — neither the literal sentinel
-    # nor an empty script body is acceptable.
-    assert "__ROBOMP_CONFIG__" not in resp.text
-    assert '"replayEnabled":' in resp.text
-
-
-def test_index_substitutes_replay_token(env, monkeypatch: pytest.MonkeyPatch) -> None:
-    """When a replay token is set, the config blob exposes it to the SPA."""
-    monkeypatch.setenv("ROBOMP_REPLAY_TOKEN", "secret-token-7")
-    reset_settings_cache()
-    cfg = Settings()  # type: ignore[call-arg]
-    cfg.ensure_paths()
-    app = create_app(cfg)
-    try:
-        with TestClient(app) as client:
-            resp = client.get("/")
-        assert resp.status_code == 200
-        assert '"replayEnabled":true' in resp.text
-        assert '"replayToken":"secret-token-7"' in resp.text
-    finally:
-        close_database()
 
 
 def test_api_status_reports_runtime_counts_and_inflight(settings: Settings) -> None:

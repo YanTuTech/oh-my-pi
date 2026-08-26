@@ -86,14 +86,14 @@ export function formatGroupedFiles(
 }
 
 // =============================================================================
-// Parsing grouped output back into per-line context (TUI renderers)
+// Parsing grouped output back into per-line host context
 // =============================================================================
 
 const GROUPED_HEADER_RE = /^(#+)\s+(.*)$/;
 const HEADER_SUFFIX_RE = /\s+\([^)]*\)\s*$/;
 const HEADER_HASH_TAG_RE = /#[0-9a-f]+$/i;
 
-/** Per-line classification of grouped output, used by renderers for hyperlinks. */
+/** Per-line classification of grouped output, used by hosts for hyperlinks. */
 export interface GroupedLineContext {
 	/** Directory header, file header, or any non-header body/content line. */
 	kind: "dir" | "file" | "content";

@@ -1,10 +1,8 @@
 # @oh-my-pi/pi-coding-agent
 
-Core implementation package for the `omp` coding agent in the `oh-my-pi` monorepo.
+Headless coding-agent Runtime with SDK, RPC/ACP process hosts, tools, sessions, extensions, memory, and standalone HTML export. The package does not publish a CLI or UI.
 
-For installation, setup, provider configuration, model roles, slash commands, and full CLI reference, see:
-- [Monorepo README (local)](../../README.md)
-- [Monorepo README (GitHub)](https://github.com/can1357/oh-my-pi#readme)
+Public entrypoints and embedding examples are documented in the [monorepo README](../../README.md).
 
 Package-specific references:
 - [CHANGELOG](./CHANGELOG.md)
@@ -15,7 +13,7 @@ Package-specific references:
 
 ## Memory backends
 
-The agent supports three mutually-exclusive memory backends, selected via the `memory.backend` setting (Settings → Memory tab, or `~/.omp/config.yml`):
+The Runtime supports three mutually-exclusive memory backends, selected via the `memory.backend` setting or a host override:
 
 - `off` (default) — no memory subsystem runs.
 - `local` — existing rollout-summarisation pipeline; writes `memory_summary.md` and consolidated artifacts under the agent dir.

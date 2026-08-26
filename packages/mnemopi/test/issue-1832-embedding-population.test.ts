@@ -13,17 +13,9 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
-import { randomBytes } from "node:crypto";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import "./setup";
-import { cmdRemember } from "@oh-my-pi/pi-mnemopi/cli";
-import { BeamMemory } from "@oh-my-pi/pi-mnemopi/core/beam";
 import { Mnemopi } from "@oh-my-pi/pi-mnemopi/core/memory";
-import {
-	type ResolvedMnemopiRuntimeOptions,
-	withMnemopiRuntimeOptions,
-} from "@oh-my-pi/pi-mnemopi/core/runtime-options";
+import { withMnemopiRuntimeOptions } from "@oh-my-pi/pi-mnemopi/core/runtime-options";
 
 interface EmbeddingRow {
 	readonly memory_id: string;
@@ -213,47 +205,6 @@ describe("issue #1832 — embedding write/read coverage", () => {
 			expect(episodicRow).toBeDefined();
 			expect(JSON.parse(episodicRow?.embedding_json ?? "[]")).toEqual([0, 0, 1, 0]);
 		});
-	});
-
-	it("flushes pending embeddings before close so short-lived `mnemopi store` owners persist them", async () => {
-		// Repro for #1833 review comment: CLI `cmdRemember` (via `withMemory`) and MCP
-		// `handleRemember` (via `withBeam`) close the SQLite handle immediately after the
-		// synchronous `remember()` call. Without a drain, the background `embed()` lands
-		// on a closed DB and silently drops the row. This test goes through the real CLI
-		// handler so any regression of `withMemory`'s flush-before-close invariant fails
-		// here, not just at the level of `flushExtractions()` itself.
-		const { provider, calls } = fakeProvider();
-		const dbPath = `${tmpdir()}/mnemopi-1833-${randomBytes(6).toString("hex")}.db`;
-		const captured: string[] = [];
-		const stdout = { write: (s: string) => captured.push(s) };
-		const stderr = { write: (s: string) => captured.push(s) };
-		const runtimeOptions: ResolvedMnemopiRuntimeOptions = {
-			embeddings: { provider },
-		};
-
-		await withMnemopiRuntimeOptions(runtimeOptions, async () => {
-			const exit = await cmdRemember(["alpha checklist for short-lived owner", "cli", "0.5"], {
-				dbPath,
-				stdout,
-				stderr,
-			});
-			expect(exit).toBe(0);
-		});
-
-		// Re-open as a separate session to verify the embedding survived `withMemory`'s close.
-		const fresh = new BeamMemory({ dbPath });
-		try {
-			const rows = fresh.db.query("SELECT memory_id, embedding_json FROM memory_embeddings").all() as {
-				memory_id: string;
-				embedding_json: string;
-			}[];
-			expect(rows).toHaveLength(1);
-			expect(JSON.parse(rows[0]?.embedding_json ?? "[]")).toEqual([1, 0, 0, 0]);
-			expect(calls()).toBeGreaterThanOrEqual(1);
-		} finally {
-			fresh.close();
-			rmSync(dbPath, { force: true });
-		}
 	});
 
 	it("scopes embedQuery() cache per provider so two Mnemopi runtimes do not cross-contaminate", async () => {

@@ -1,6 +1,6 @@
 """Manually enqueue an issue as if a webhook arrived.
 
-Shared by the `robomp triage` CLI and the dashboard's POST /api/trigger.
+Shared by the `robomp triage` command and the headless POST /api/trigger endpoint.
 """
 
 from __future__ import annotations

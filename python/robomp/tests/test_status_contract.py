@@ -227,7 +227,7 @@ def test_status_contract(settings: Settings) -> None:
 
         # Compare the normalized payload against the committed fixture. Normal
         # pytest runs assert equality; regenerate only when ROBOMP_UPDATE_STATUS_CONTRACT=1.
-        fixture_path = Path(__file__).parent.parent / "web/test/fixtures/status-contract.json"
+        fixture_path = Path(__file__).parent / "fixtures/status-contract.json"
         actual = _normalize_for_fixture(data)
         if os.environ.get(_UPDATE_ENV) == "1":
             fixture_path.parent.mkdir(parents=True, exist_ok=True)

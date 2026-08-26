@@ -42,7 +42,7 @@ The tool returns a single text block in `content[0].text` plus structured `detai
   - `perFileLimitReached` — a hot file was trimmed to the per-file match cap.
   - `linesTruncated` — one or more matched lines were shortened to `512` chars plus `…`.
   - `truncated` and `meta.truncation` — final text output was head-truncated by `truncateHead()`.
-  - `displayContent` — TUI-only rendering text with `│` gutters instead of model anchors.
+  - `displayContent` — host-facing text with `│` gutters instead of model anchors; retained in the RPC details contract.
   - `missingPaths` — multi-path entries skipped because their base path did not exist.
 - No-match result text is `No matches found` (or `No more results (...)` when `skip` points past the last file page), optionally followed by skipped missing-path, unreadable-archive, or oversized-file notes.
 
@@ -90,7 +90,7 @@ The tool returns a single text block in `content[0].text` plus structured `detai
    - caps multi-file output to 20 files per page (`DEFAULT_FILE_LIMIT`), using `skip` as the next file offset;
    - caps matches per file to 20 for multi-file scopes and 200 for single-file scopes;
    - round-robins selected per-file matches so one file does not monopolize the page;
-   - formats lines through `formatMatchLine()` for the model and `formatCodeFrameLine()` for TUI;
+   - formats lines through `formatMatchLine()` for the model and `formatCodeFrameLine()` for host-facing details;
    - in hashline mode, records a whole-file snapshot per rendered file with `recordFileSnapshot()` to mint the `#TAG` anchor (archive, virtual, and immutable paths are skipped).
 14. Final text is passed through `truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER })`, so the effective cap is the default byte cap from `streaming-output.ts`, not the default line cap.
 15. `toolResult()` attaches text plus limit/truncation metadata.

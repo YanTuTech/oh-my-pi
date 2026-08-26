@@ -24,7 +24,7 @@ import {
 	Patch as HashlinePatch,
 	type SnapshotStore,
 } from "@oh-my-pi/hashline";
-import type { Theme } from "../modes/theme/theme";
+import type { Theme } from "../extensibility/ui-contract";
 import { type EditMode, resolveEditMode } from "../utils/edit-mode";
 import { computeEditDiff, type DiffError, type DiffResult } from "./diff";
 import { computeHashlineDiff, computeHashlineSectionDiff } from "./hashline/diff";

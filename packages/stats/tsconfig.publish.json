@@ -15,7 +15,6 @@
 		"src"
 	],
 	"exclude": [
-		"src/client",
 		"dist",
 		"node_modules",
 		"test",

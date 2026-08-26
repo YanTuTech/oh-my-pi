@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AutocompleteItem } from "@oh-my-pi/pi-tui";
 import { logger, prompt } from "@oh-my-pi/pi-utils";
 import type { ExtensionContext, ExtensionFactory } from "../extensibility/extensions";
+import type { AutocompleteItem } from "../extensibility/ui-contract";
 import * as git from "../utils/git";
 import commandResumeTemplate from "./command-resume.md" with { type: "text" };
-import { createDashboardController } from "./dashboard";
+import { createDashboardController } from "./dashboard-runtime";
 import { ensureAutoresearchBranch } from "./git";
 import { formatNum } from "./helpers";
 import promptTemplate from "./prompt.md" with { type: "text" };
@@ -222,26 +222,6 @@ export const createAutoresearchExtension: ExtensionFactory = api => {
 			} else {
 				ctx.ui.notify("Autoresearch enabled—describe what to optimize in your next message.", "info");
 			}
-		},
-	});
-
-	api.registerShortcut("ctrl+x", {
-		description: "Toggle autoresearch dashboard",
-		handler(ctx): void {
-			const runtime = getRuntime(ctx);
-			if (runtime.state.results.length === 0 && !runtime.runningExperiment) {
-				ctx.ui.notify("No autoresearch results yet", "info");
-				return;
-			}
-			runtime.dashboardExpanded = !runtime.dashboardExpanded;
-			dashboard.updateWidget(ctx, runtime);
-		},
-	});
-
-	api.registerShortcut("ctrl+shift+x", {
-		description: "Show autoresearch dashboard overlay",
-		handler(ctx): Promise<void> {
-			return dashboard.showOverlay(ctx, getRuntime(ctx));
 		},
 	});
 

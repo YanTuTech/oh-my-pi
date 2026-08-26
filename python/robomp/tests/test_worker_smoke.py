@@ -1,11 +1,11 @@
 """Gated end-to-end smoke test.
 
-Runs only when ROBOMP_INTEGRATION=1 and `omp` is available on PATH (or via
+Runs only when ROBOMP_INTEGRATION=1 and the Runtime RPC host is available on PATH (or via
 ROBOMP_OMP_COMMAND). Spins up:
 
 - a local bare git repo with a trivial failing test,
 - a fake GitHub API via httpx.MockTransport that records comments + PRs,
-- a real `omp --mode rpc` subprocess driven by `worker.run_task`.
+- a real Agent Runtime RPC subprocess driven by `worker.run_task`.
 
 Asserts that triage_issue produces:
 - at least one issue comment,
