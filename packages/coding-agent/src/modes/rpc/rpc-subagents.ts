@@ -27,6 +27,10 @@ export interface RpcSubagentTranscriptSelector {
 }
 
 type RpcSubagentOutput = (frame: RpcSubagentFrame) => void;
+type RpcSubagentEventProjector = (
+	subagentId: string,
+	event: SubagentEventPayload["event"],
+) => SubagentEventPayload["event"] | undefined;
 
 const MAX_RETAINED_TRANSCRIPT_REFERENCES = 256;
 
@@ -110,10 +114,12 @@ export class RpcSubagentRegistry {
 	#staleSubagentIds = new Set<string>();
 	#unsubscribers: Array<() => void> = [];
 	#output: RpcSubagentOutput;
+	#projectEvent: RpcSubagentEventProjector;
 	#subscriptionLevel: RpcSubagentSubscriptionLevel = "off";
 
-	constructor(eventBus: EventBus, output: RpcSubagentOutput) {
+	constructor(eventBus: EventBus, output: RpcSubagentOutput, projectEvent?: RpcSubagentEventProjector) {
 		this.#output = output;
+		this.#projectEvent = projectEvent ?? ((_subagentId, event) => event);
 		this.#unsubscribers.push(
 			eventBus.on(TASK_SUBAGENT_LIFECYCLE_CHANNEL, data => {
 				this.handleLifecycle(data as SubagentLifecyclePayload);
@@ -242,7 +248,18 @@ export class RpcSubagentRegistry {
 	handleEvent(payload: SubagentEventPayload): void {
 		if (this.#staleSubagentIds.has(payload.id)) return;
 		if (this.#subscriptionLevel !== "events") return;
-		this.#output({ type: "subagent_event", payload } satisfies RpcSubagentEventFrame);
+		const event = this.#projectEvent(payload.id, payload.event);
+		if (event === undefined) return;
+		const snapshot = this.#subagents.get(payload.id);
+		this.#output({
+			type: "subagent_event",
+			payload: {
+				id: payload.id,
+				event,
+				...(snapshot?.parentToolCallId === undefined ? {} : { parentToolCallId: snapshot.parentToolCallId }),
+				...(snapshot?.index === undefined ? {} : { index: snapshot.index }),
+			},
+		} satisfies RpcSubagentEventFrame);
 	}
 
 	resolveSessionFile(selector: RpcSubagentTranscriptSelector): string {

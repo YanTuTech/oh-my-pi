@@ -35,12 +35,12 @@ describe("managed Runtime contract", () => {
 		const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-managed-model-broker-"));
 		const socketPath = path.join(directory, "model.sock");
 		let requestPath: string | undefined;
-		let authorization: string | null = null;
+		let authorization: string | undefined;
 		const server = Bun.serve({
 			unix: socketPath,
 			fetch(request) {
 				requestPath = new URL(request.url).pathname;
-				authorization = request.headers.get("authorization");
+				authorization = request.headers.get("authorization") ?? undefined;
 				const usage = {
 					input: 1,
 					output: 1,
@@ -75,7 +75,8 @@ describe("managed Runtime contract", () => {
 		});
 		const context: Context = { messages: [{ role: "user", content: "hello", timestamp: Date.now() }] };
 		try {
-			const result = await createManagedModelBrokerStreamFn(socketPath)(model, context, {}).result();
+			const stream = await createManagedModelBrokerStreamFn(socketPath)(model, context, {});
+			const result = await stream.result();
 			expect(result.content).toEqual([{ type: "text", text: "brokered" }]);
 			expect(requestPath).toBe("/api/stream");
 			expect(authorization).toBe("Bearer unix-peer-v1");

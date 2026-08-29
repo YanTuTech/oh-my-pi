@@ -108,6 +108,16 @@ describe("parseAgentFields", () => {
 		expect(fields?.autoloadSkills).toEqual(["user-created-skill-a", "user-created-skill-b"]);
 	});
 
+	test("parses locked Skill URI constraints from Agent frontmatter", () => {
+		const fields = parseAgentFields({
+			name: "locked-expert",
+			description: "desc",
+			"skill-uris": ["skill://member-a", "skill://member-b"],
+		});
+
+		expect(fields?.skillUris).toEqual(["skill://member-a", "skill://member-b"]);
+	});
+
 	test("parses autoloadSkills from CSV string", () => {
 		const fields = parseAgentFields({
 			name: "oracle",
