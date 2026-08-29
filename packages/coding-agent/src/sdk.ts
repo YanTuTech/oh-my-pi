@@ -1688,6 +1688,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			},
 			isToolActive: name => activeToolNames.has(name),
 			setActiveToolNames,
+			getEnabledToolNames: () => session?.getEnabledToolNames() ?? [],
 			toolRegistry,
 			hasUI: options.hasUI ?? false,
 			getApiKey: options.getApiKey,

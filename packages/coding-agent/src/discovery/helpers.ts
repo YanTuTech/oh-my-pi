@@ -241,6 +241,8 @@ export interface ParsedAgentFields {
 	output?: unknown;
 	thinkingLevel?: ConfiguredThinkingLevel;
 	autoloadSkills?: string[];
+	/** Exact logical Skill roots this Agent may read through a replayed host skill_read tool. */
+	skillUris?: string[];
 	readSummarize?: boolean;
 	blocking?: boolean;
 	/** `true` = prewalk into the default target; string = prewalk into that model pattern. */
@@ -268,6 +270,9 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 	if (tools && !tools.includes("yield")) {
 		tools = [...tools, "yield"];
 	}
+	const skillUris = parseArrayOrCSV(frontmatter["skill-uris"] ?? frontmatter.skillUris)
+		?.map(uri => uri.trim())
+		.filter(uri => /^skill:\/\/[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(uri));
 
 	// Parse spawns field (array, "*", or CSV)
 	let spawns: string[] | "*" | undefined;
@@ -326,6 +331,7 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 		thinkingLevel,
 		blocking,
 		autoloadSkills,
+		skillUris: skillUris && skillUris.length > 0 ? [...new Set(skillUris)] : undefined,
 		readSummarize,
 		prewalk,
 		advisor,

@@ -14,6 +14,10 @@ import type {
 
 type RpcHostToolOutput = (frame: RpcHostToolCallRequest | RpcHostToolCancelRequest) => void;
 
+export interface RpcHostToolConstraints {
+	readonly allowedSkillUris?: readonly string[];
+}
+
 type PendingHostToolCall = {
 	resolve: (result: AgentToolResult<unknown>) => void;
 	reject: (error: Error) => void;
@@ -50,10 +54,12 @@ class RpcHostToolAdapter<TParams extends TSchema = TSchema, TTheme extends Theme
 	readonly loadMode: ToolLoadMode;
 	#bridge: RpcHostToolBridge;
 	#definition: RpcHostToolDefinition;
+	#constraints: RpcHostToolConstraints;
 
-	constructor(definition: RpcHostToolDefinition, bridge: RpcHostToolBridge) {
+	constructor(definition: RpcHostToolDefinition, bridge: RpcHostToolBridge, constraints: RpcHostToolConstraints = {}) {
 		this.#definition = definition;
 		this.#bridge = bridge;
+		this.#constraints = constraints;
 		applyToolProxy(definition, this);
 		this.loadMode = defaultLoadModeForToolName(definition.name, definition.loadMode);
 	}
@@ -64,6 +70,13 @@ class RpcHostToolAdapter<TParams extends TSchema = TSchema, TTheme extends Theme
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<unknown>,
 	): Promise<AgentToolResult<unknown>> {
+		if (this.#definition.name === "skill_read" && this.#constraints.allowedSkillUris !== undefined) {
+			const uri = (params as Record<string, unknown>).uri;
+			const allowed =
+				typeof uri === "string" &&
+				this.#constraints.allowedSkillUris.some(root => uri === root || uri.startsWith(`${root}/`));
+			if (!allowed) return Promise.reject(new Error("Skill URI is outside the locked resource set"));
+		}
 		return this.#bridge.requestExecution(
 			this.#definition,
 			toolCallId,
@@ -88,9 +101,22 @@ export class RpcHostToolBridge {
 		return Array.from(this.#definitions.keys());
 	}
 
+	/** Return the currently registered host tool definitions. */
+	getDefinitions(): RpcHostToolDefinition[] {
+		return [...this.#definitions.values()];
+	}
+
 	setTools(tools: RpcHostToolDefinition[]): AgentTool[] {
 		this.#definitions = new Map(tools.map(tool => [tool.name, tool]));
-		return tools.map(tool => new RpcHostToolAdapter(tool, this));
+		return this.createTools();
+	}
+
+	/** Create child-local adapters from the current parent definitions without mutating the parent set. */
+	createTools(allowedToolNames?: readonly string[], constraints: RpcHostToolConstraints = {}): AgentTool[] {
+		const allowed = allowedToolNames === undefined ? undefined : new Set(allowedToolNames);
+		return [...this.#definitions.values()]
+			.filter(definition => definition.name !== "task" && (allowed === undefined || allowed.has(definition.name)))
+			.map(definition => new RpcHostToolAdapter(definition, this, constraints));
 	}
 
 	handleResult(frame: RpcHostToolResult): boolean {

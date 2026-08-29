@@ -110,6 +110,12 @@ export interface StructuredSubagentRequest {
 	enableLsp?: boolean;
 	/** Explicitly pass false for plan mode or invocation kinds that must not use IRC. */
 	enableIrc?: boolean;
+	/**
+	 * Parent-enabled tool names the child tool set is intersected with.
+	 * Forwarded to the executor so the subagent only gets tools both its Agent
+	 * definition and the parent session allow.
+	 */
+	subagentToolAllowlist?: string[];
 	/** `0` disables executor wall-clock timeout. Undefined inherits settings. */
 	maxRuntimeMs?: number;
 	signal?: AbortSignal;
@@ -420,6 +426,7 @@ function buildExecutorOptions(
 		enableLsp: policy.enableLsp,
 		enableIrc: policy.enableIrc,
 		maxRuntimeMs: request.maxRuntimeMs,
+		subagentToolAllowlist: request.subagentToolAllowlist,
 		restrictToolNames,
 		keepAlive: request.keepAlive,
 		signal: request.signal,

@@ -62,6 +62,7 @@ import type { WorkspaceTree } from "../workspace-tree";
 import { generateTaskLabel } from "./label";
 import { resolveAgentPrewalkDefault } from "./prewalk";
 import { isReadOnlyAgent } from "./read-only-policy";
+import { replaySubagentHostTools } from "./subagent-host-tools";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
 import {
 	type AgentDefinition,
@@ -411,6 +412,11 @@ export interface ExecutorOptions {
 	 * tool, suppressing discovered and always-included capabilities.
 	 */
 	restrictToolNames?: boolean;
+	/**
+	 * Parent-enabled tool names the child's tool set is intersected with.
+	 * When present, the resolved toolNames are filtered to this allowlist.
+	 */
+	subagentToolAllowlist?: string[];
 	signal?: AbortSignal;
 	onProgress?: (progress: AgentProgress) => void;
 	/**
@@ -2753,6 +2759,10 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 	if (atMaxDepth && toolNames?.includes("task")) {
 		toolNames = toolNames.filter(name => name !== "task");
 	}
+	if (options.subagentToolAllowlist !== undefined) {
+		const allowed = new Set(options.subagentToolAllowlist);
+		toolNames = (toolNames ?? []).filter((name) => allowed.has(name));
+	}
 	// Ordinary agents retain the host's always-on collaboration capability.
 	// Restricted sessions must not widen their explicit host tool list with hub.
 	if (toolNames && !options.restrictToolNames && !toolNames.includes("hub")) {
@@ -3159,6 +3169,13 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				void sessionPromise.then(created => created.session.dispose()).catch(() => {});
 				throw err;
 			}
+			// Create child-local host adapters from the exact Agent tool allowlist.
+			// Skill reads are additionally constrained to the locked logical roots.
+			await replaySubagentHostTools(session, {
+				allowedToolNames: toolNames,
+				allowedSkillUris:
+					agent.skillUris ?? (toolNames?.includes("skill_read") ? [] : undefined),
+			});
 			sessionCreatedAt = performance.now();
 
 			monitor.setActiveSession(session);

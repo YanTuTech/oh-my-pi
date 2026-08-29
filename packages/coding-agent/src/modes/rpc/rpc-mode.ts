@@ -36,6 +36,7 @@ import type { EventBus } from "../../utils/event-bus";
 import { calculateTokensPerSecond } from "../../utils/token-rate";
 import { initializeExtensions } from "../runtime-init";
 import { isRpcHostToolResult, isRpcHostToolUpdate, RpcHostToolBridge } from "./host-tools";
+import { registerSubagentHostToolReplay } from "../../task/subagent-host-tools";
 import { isRpcHostUriResult, RpcHostUriBridge } from "./host-uris";
 import { MAX_RPC_FRAME_BYTES, MAX_RPC_REASSEMBLED_BYTES, RpcFrameEncoder } from "./rpc-frame";
 import { claimRpcInput, readRpcInputFrames } from "./rpc-input";
@@ -107,6 +108,7 @@ export type RpcSessionEventProjection =
 
 export interface RunRpcModeOptions {
 	projectSessionEvent(event: AgentSessionEvent): RpcSessionEventProjection;
+	projectSubagentSessionEvent?(subagentId: string, event: AgentSessionEvent): RpcSessionEventProjection;
 	terminateOnProjectionFailure?(error: unknown): never;
 }
 
@@ -139,6 +141,31 @@ export function projectRpcSessionEvent(
 			return result.event;
 		}
 		throw new Error("invalid RPC session event projection action");
+	} catch (error) {
+		return (options?.terminateOnProjectionFailure ?? terminateProjectionFailure)(error);
+	}
+}
+
+export function projectRpcSubagentSessionEvent(
+	subagentId: string,
+	event: AgentSessionEvent,
+	options: RunRpcModeOptions,
+): AgentSessionEvent | undefined {
+	try {
+		const projector = options.projectSubagentSessionEvent;
+		if (projector === undefined) return event;
+		const result = projector(subagentId, event);
+		if (!result || typeof result !== "object") {
+			throw new Error("invalid RPC subagent session event projection");
+		}
+		if (result.action === "drop") return undefined;
+		if (result.action === "forward" || result.action === "replace") {
+			if (!result.event || typeof result.event !== "object") {
+				throw new Error("RPC subagent session event projection returned no event");
+			}
+			return result.event;
+		}
+		throw new Error("invalid RPC subagent session event projection action");
 	} catch (error) {
 		return (options?.terminateOnProjectionFailure ?? terminateProjectionFailure)(error);
 	}
@@ -782,8 +809,21 @@ export async function runRpcMode(
 
 	const pendingExtensionRequests = new RpcPendingExtensionRequests();
 	const hostToolBridge = new RpcHostToolBridge(output);
+	// Create child-local adapters by intersecting the locked Agent definition
+	// with the currently registered parent RPC host tools.
+	registerSubagentHostToolReplay(async (session, constraints) => {
+		await session.refreshRpcHostTools(
+			hostToolBridge.createTools(constraints.allowedToolNames, {
+				allowedSkillUris: constraints.allowedSkillUris,
+			}),
+		);
+	});
 	const hostUriBridge = new RpcHostUriBridge(output);
-	const subagentRegistry = eventBus ? new RpcSubagentRegistry(eventBus, output) : undefined;
+	const subagentRegistry = eventBus
+		? new RpcSubagentRegistry(eventBus, output, (subagentId, event) =>
+				projectRpcSubagentSessionEvent(subagentId, event, options),
+			)
+		: undefined;
 
 	// Shutdown request flag (wrapped in object to allow mutation with const)
 	const shutdownState = { requested: false };

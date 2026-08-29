@@ -318,6 +318,29 @@ describe("RPC subagent registry", () => {
 		expect(frames[0]).toEqual({ type: "subagent_event", payload: eventPayload });
 		registry.dispose();
 	});
+
+	test("projects child session events before they reach the RPC channel", () => {
+		const eventBus = new EventBus();
+		const frames: RpcSubagentFrame[] = [];
+		const registry = new RpcSubagentRegistry(
+			eventBus,
+			frame => frames.push(frame),
+			(_id, event) => (event.type === "agent_start" ? undefined : { type: "agent_end" }),
+		);
+		registry.setSubscriptionLevel("events");
+
+		eventBus.emit(TASK_SUBAGENT_EVENT_CHANNEL, {
+			id: "SubagentA",
+			event: { type: "agent_start" },
+		} satisfies SubagentEventPayload);
+		eventBus.emit(TASK_SUBAGENT_EVENT_CHANNEL, {
+			id: "SubagentA",
+			event: { type: "agent_end" },
+		} satisfies SubagentEventPayload);
+
+		expect(frames).toEqual([{ type: "subagent_event", payload: { id: "SubagentA", event: { type: "agent_end" } } }]);
+		registry.dispose();
+	});
 });
 
 describe("readRpcSubagentTranscript", () => {

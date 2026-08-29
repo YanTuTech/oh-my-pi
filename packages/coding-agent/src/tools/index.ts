@@ -255,6 +255,10 @@ export interface ToolSession {
 	isToolActive?: (name: string) => boolean;
 	/** Update the active built-in tool predicate when a session changes tools mid-run. */
 	setActiveToolNames?: (names: Iterable<string>) => void;
+	/** Return the names of built-in tools enabled in this session's current tool set. */
+	getEnabledToolNames?: () => string[];
+	/** Replace the RPC host-owned tools and refresh the active set before the next model call. */
+	refreshRpcHostTools?: (tools: AgentTool[]) => Promise<void>;
 	/** Canonical map containing every registered tool exactly once. */
 	toolRegistry?: Map<string, Tool>;
 	/** `xd://` presentation state backed by {@link toolRegistry}. */

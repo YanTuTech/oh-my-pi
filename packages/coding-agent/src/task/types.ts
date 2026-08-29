@@ -82,6 +82,10 @@ export interface SubagentProgressPayload {
 export interface SubagentEventPayload {
 	id: string;
 	event: AgentSessionEvent;
+	/** Attached by the RPC registry for host-side durable Team binding. */
+	parentToolCallId?: string;
+	/** Attached by the RPC registry for host-side durable Team binding. */
+	index?: number;
 }
 
 /** Payload emitted on TASK_SUBAGENT_LIFECYCLE_CHANNEL */
@@ -367,6 +371,8 @@ export interface AgentDefinition {
 	output?: unknown;
 	blocking?: boolean;
 	autoloadSkills?: string[];
+	/** Exact logical Skill roots allowed for replayed host skill_read calls. */
+	skillUris?: string[];
 	/** When `false`, the agent's `read` tool returns verbatim file content instead of structural summaries. */
 	readSummarize?: boolean;
 	/** Prewalk hand-off for the spawned session: `true` = switch to the default prewalk target at the first edit/write, string = custom target model pattern. */

@@ -1434,6 +1434,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				blockedAgent: this.#blockedAgent,
 				enableLsp: (this.session.enableLsp ?? true) && this.session.settings.get("task.enableLsp"),
 				enableIrc: isIrcEnabled(this.session.settings, this.session.taskDepth ?? 0),
+				subagentToolAllowlist: this.session.getEnabledToolNames?.(),
 				maxRuntimeMs: this.session.settings.get("task.maxRuntimeMs"),
 				signal,
 				onProgress: progress => {
