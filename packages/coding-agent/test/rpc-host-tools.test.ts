@@ -71,6 +71,48 @@ describe("RpcHostToolBridge", () => {
 		expect(frames).toEqual([]);
 	});
 
+	it("intersects child host tools and rejects Skill URIs outside the locked resource set", async () => {
+		const frames: Array<RpcHostToolCallRequest | RpcHostToolCancelRequest> = [];
+		const bridge = new RpcHostToolBridge(frame => frames.push(frame));
+		bridge.setTools([
+			{
+				name: "skill_read",
+				description: "Read one Skill resource",
+				parameters: { type: "object", properties: { uri: { type: "string" } }, required: ["uri"] },
+			},
+			{
+				name: "web_search",
+				description: "Search",
+				parameters: { type: "object", properties: {} },
+			},
+			{
+				name: "task",
+				description: "Spawn",
+				parameters: { type: "object", properties: {} },
+			},
+		]);
+		const childTools = bridge.createTools(["skill_read", "task"], {
+			allowedSkillUris: ["skill://member-a"],
+		});
+
+		expect(childTools.map(tool => tool.name)).toEqual(["skill_read"]);
+		await expect(childTools[0]!.execute("denied", { uri: "skill://member-b" })).rejects.toThrow(
+			"outside the locked resource set",
+		);
+		expect(frames).toEqual([]);
+
+		const allowed = childTools[0]!.execute("allowed", { uri: "skill://member-a/references/x.md" });
+		expect(frames).toHaveLength(1);
+		const request = frames[0];
+		if (request?.type !== "host_tool_call") throw new Error("Expected host_tool_call frame");
+		bridge.handleResult({
+			type: "host_tool_result",
+			id: request.id,
+			result: { content: [{ type: "text", text: "ok" }] },
+		});
+		await expect(allowed).resolves.toMatchObject({ content: [{ type: "text", text: "ok" }] });
+	});
+
 	it("forwards host tool updates and results to the pending execution", async () => {
 		const frames: Array<RpcHostToolCallRequest | RpcHostToolCancelRequest> = [];
 		const bridge = new RpcHostToolBridge(frame => {
