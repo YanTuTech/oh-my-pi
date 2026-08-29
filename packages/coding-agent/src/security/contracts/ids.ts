@@ -1,19 +1,8 @@
+import { canonicalJson } from "../../utils/canonical-json";
 import type { SecurityLocation } from "./types";
 
-function canonicalize(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(canonicalize);
-	if (!value || typeof value !== "object") return value;
-	const record = value as Record<string, unknown>;
-	const result: Record<string, unknown> = {};
-	for (const key of Object.keys(record).sort()) {
-		const item = record[key];
-		if (item !== undefined) result[key] = canonicalize(item);
-	}
-	return result;
-}
-
 export function canonicalSecurityJson(value: unknown): string {
-	return JSON.stringify(canonicalize(value));
+	return canonicalJson(value);
 }
 
 function normalizeFingerprintPath(value: string): string {

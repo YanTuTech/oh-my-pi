@@ -4,14 +4,23 @@
  * Spawns the agent in RPC mode and provides a typed API for all operations.
  */
 
+import * as path from "node:path";
 import { isPromise } from "node:util/types";
 import type { AgentEvent, AgentMessage, AgentToolResult, ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import type { CompactionResult } from "@oh-my-pi/pi-agent-core/compaction";
 import type { ImageContent, Model } from "@oh-my-pi/pi-ai";
+import { upgradeJsonSchemaTo202012, validateJsonSchemaValue } from "@oh-my-pi/pi-ai/utils/schema";
 import { isRecord, ptree, readJsonl } from "@oh-my-pi/pi-utils";
 import type { FileSink } from "bun";
 import type { BashResult } from "../../exec/bash-executor";
 import type { AgentSessionEvent, SessionStats } from "../../session/agent-session";
+import { compareCanonicalJsonStrings } from "../../utils/canonical-json";
+import {
+	canonicalRpcHostToolArguments,
+	createRpcHostToolManifestDigest,
+	isManagedRpcHostToolIdentifier,
+} from "./host-tools";
+import { validateManagedRuntimeLaunchBinding } from "./managed-runtime";
 import { MAX_RPC_FRAME_BYTES, MAX_RPC_REASSEMBLED_BYTES, RpcFrameDecoder, type RpcProtocolVersion } from "./rpc-frame";
 import {
 	RPC_MESSAGES_PAGE_BUSY_ERROR,
@@ -31,6 +40,8 @@ import type {
 	RpcHostToolDefinition,
 	RpcHostToolResult,
 	RpcHostToolUpdate,
+	RpcManagedRuntimeLaunchBindingV1,
+	RpcReadyFrame,
 	RpcResponse,
 	RpcSessionState,
 	RpcSubagentEventFrame,
@@ -40,6 +51,7 @@ import type {
 	RpcSubagentSnapshot,
 	RpcSubagentSubscriptionLevel,
 } from "./rpc-types";
+import { RPC_CAPABILITY_KINDS_V1 } from "./rpc-types";
 
 /** Distributive Omit that works with union types */
 type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
@@ -50,6 +62,8 @@ type RpcCommandBody = DistributiveOmit<RpcCommand, "id">;
 export interface RpcClientOptions {
 	/** Optional compatible RPC process entrypoint; defaults to the headless Runtime RPC host. */
 	rpcHostPath?: string;
+	/** Bun executable used to launch the RPC host; managed mode requires an absolute path. */
+	runtimeExecutable?: string;
 	/** Working directory for the agent */
 	cwd?: string;
 	/** Environment variables */
@@ -66,6 +80,12 @@ export interface RpcClientOptions {
 	terminationGraceMs?: number;
 	/** Custom tools owned by the embedding host and exposed over the RPC transport */
 	customTools?: RpcClientCustomTool[];
+	/** Start the fail-closed Runtime profile that exposes only immutable host tools. */
+	managedRuntime?: boolean;
+	/** Launcher-owned Unix-domain socket for the trusted model broker. */
+	managedModelBrokerSocket?: string;
+	/** LaunchGuard-owned identity and generation values expected in the ready frame. */
+	managedRuntimeLaunchBinding?: RpcManagedRuntimeLaunchBindingV1;
 }
 
 export type ModelInfo = Pick<Model, "provider" | "id" | "contextWindow" | "reasoning" | "thinking">;
@@ -79,6 +99,8 @@ export type RpcAvailableCommandsUpdateListener = (commands: RpcAvailableSlashCom
 
 export interface RpcClientToolContext<TDetails = unknown> {
 	toolCallId: string;
+	capabilityKind?: RpcHostToolCallRequest["capabilityKind"];
+	argumentsDigest: string;
 	signal: AbortSignal;
 	sendUpdate(partialResult: RpcClientToolResult<TDetails>): void;
 }
@@ -101,6 +123,118 @@ export function defineRpcClientTool<
 	TDetails = unknown,
 >(tool: RpcClientCustomTool<TParams, TDetails>): RpcClientCustomTool<TParams, TDetails> {
 	return tool;
+}
+
+export function isExactManagedHostToolAcknowledgement(
+	expectedNames: readonly string[],
+	acknowledgedNames: unknown,
+): acknowledgedNames is string[] {
+	if (
+		!Array.isArray(acknowledgedNames) ||
+		!acknowledgedNames.every((name): name is string => typeof name === "string") ||
+		new Set(acknowledgedNames).size !== acknowledgedNames.length
+	) {
+		return false;
+	}
+	const expected = [...expectedNames].sort(compareCanonicalJsonStrings);
+	const acknowledged = [...acknowledgedNames].sort(compareCanonicalJsonStrings);
+	return expected.length === acknowledged.length && expected.every((name, index) => name === acknowledged[index]);
+}
+
+export function isManagedRuntimeReadyFrame(
+	value: unknown,
+	expected?: RpcManagedRuntimeLaunchBindingV1,
+	expectedProcessId?: number,
+): value is RpcReadyFrame {
+	if (!isRecord(value) || value.type !== "ready" || !isRecord(value.managedRuntime)) return false;
+	const attestation = value.managedRuntime;
+	const fixedContract =
+		value.managedRuntime.contractVersion === 1 &&
+		value.managedRuntime.protocolEpoch === 1 &&
+		value.managedRuntime.nativeTools === false &&
+		value.managedRuntime.hostToolsMutable === false &&
+		value.managedRuntime.ambientDiscovery === false &&
+		value.managedRuntime.modelTransport === "unix-domain-socket" &&
+		typeof value.managedRuntime.processId === "number";
+	if (!fixedContract) return false;
+	if (expectedProcessId !== undefined && attestation.processId !== expectedProcessId) return false;
+	if (expected === undefined) return true;
+	return Object.entries(expected).every(([key, expectedValue]) => attestation[key] === expectedValue);
+}
+
+export function validateManagedRuntimeClientLaunch(options: RpcClientOptions, rpcHostPath: string): string {
+	const executable = options.runtimeExecutable ?? "bun";
+	if (!options.managedRuntime) return executable;
+	if (!path.isAbsolute(executable)) throw new Error("Managed Runtime requires an absolute Runtime executable path");
+	if (!path.isAbsolute(rpcHostPath)) throw new Error("Managed Runtime requires an absolute RPC host path");
+	if (!options.cwd || !path.isAbsolute(options.cwd)) {
+		throw new Error("Managed Runtime requires an explicit absolute process working directory");
+	}
+	if (!options.sessionDir || !path.isAbsolute(options.sessionDir)) {
+		throw new Error("Managed Runtime requires an explicit absolute session directory");
+	}
+	if (options.env === undefined) throw new Error("Managed Runtime requires an explicit sanitized environment");
+	if (!options.provider || !options.model) {
+		throw new Error("Managed Runtime requires an explicit provider and model selected by the host");
+	}
+	if (!options.managedModelBrokerSocket || !path.isAbsolute(options.managedModelBrokerSocket)) {
+		throw new Error("Managed Runtime requires an absolute model broker socket path");
+	}
+	if (!options.managedRuntimeLaunchBinding) {
+		throw new Error("Managed Runtime requires a LaunchGuard-owned launch binding");
+	}
+	validateManagedRuntimeLaunchBinding(options.managedRuntimeLaunchBinding);
+	if (!isPathWithin(options.sessionDir, options.cwd)) {
+		throw new Error("Managed Runtime process working directory must stay inside the session directory");
+	}
+	if (isPathWithin(options.sessionDir, options.managedModelBrokerSocket)) {
+		throw new Error("Managed Runtime model broker socket must be outside the OMP-writable session directory");
+	}
+	if (options.args && options.args.length > 0) {
+		throw new Error("Managed Runtime does not accept additional Runtime host arguments");
+	}
+	return executable;
+}
+
+const MANAGED_RUNTIME_ENVIRONMENT_KEYS = new Set(["HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TZ"]);
+
+function isPathWithin(parent: string, candidate: string): boolean {
+	const relative = path.relative(parent, candidate);
+	return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function buildManagedRuntimeEnvironment(options: RpcClientOptions): Record<string, string> {
+	if (!options.managedRuntime) return { ...Bun.env, ...options.env } as Record<string, string>;
+	if (
+		!options.env ||
+		!options.sessionDir ||
+		!options.managedModelBrokerSocket ||
+		!options.managedRuntimeLaunchBinding
+	) {
+		throw new Error("Managed Runtime launch options were not validated");
+	}
+	for (const key of Object.keys(options.env)) {
+		if (!MANAGED_RUNTIME_ENVIRONMENT_KEYS.has(key)) {
+			throw new Error(`Managed Runtime environment variable is not allowed: ${key}`);
+		}
+	}
+	for (const key of ["HOME", "TMPDIR"] as const) {
+		const value = options.env[key];
+		if (!value || !path.isAbsolute(value) || !isPathWithin(options.sessionDir, value)) {
+			throw new Error(`Managed Runtime ${key} must be an absolute path inside the session directory`);
+		}
+	}
+	return {
+		...options.env,
+		OMP_MANAGED_MODEL_BROKER_SOCKET: options.managedModelBrokerSocket,
+		OMP_MANAGED_RUNTIME_BUNDLE_DIGEST: options.managedRuntimeLaunchBinding.runtimeBundleDigest,
+		OMP_MANAGED_BUILD_GRAPH_DIGEST: options.managedRuntimeLaunchBinding.buildGraphDigest,
+		OMP_MANAGED_CAPABILITY_REGISTRY_DIGEST: options.managedRuntimeLaunchBinding.capabilityRegistryDigest,
+		OMP_MANAGED_LAUNCH_TICKET_DIGEST: options.managedRuntimeLaunchBinding.launchTicketDigest,
+		OMP_MANAGED_CHANNEL_BINDING_DIGEST: options.managedRuntimeLaunchBinding.channelBindingDigest,
+		OMP_MANAGED_WORKER_GENERATION: String(options.managedRuntimeLaunchBinding.workerGeneration),
+		OMP_MANAGED_POLICY_GENERATION: String(options.managedRuntimeLaunchBinding.policyGeneration),
+	};
 }
 
 const agentEventTypes = new Set<AgentEvent["type"]>([
@@ -190,6 +324,8 @@ function isRpcAvailableCommandsUpdateFrame(value: unknown): value is RpcAvailabl
 	return value.type === "available_commands_update" && Array.isArray(value.commands);
 }
 
+const RPC_CAPABILITY_KIND_SET = new Set<string>(RPC_CAPABILITY_KINDS_V1);
+
 function isRpcHostToolCallRequest(value: unknown): value is RpcHostToolCallRequest {
 	if (!isRecord(value)) return false;
 	return (
@@ -197,7 +333,11 @@ function isRpcHostToolCallRequest(value: unknown): value is RpcHostToolCallReque
 		typeof value.id === "string" &&
 		typeof value.toolCallId === "string" &&
 		typeof value.toolName === "string" &&
-		isRecord(value.arguments)
+		(value.capabilityKind === undefined ||
+			(typeof value.capabilityKind === "string" && RPC_CAPABILITY_KIND_SET.has(value.capabilityKind))) &&
+		(value.dispatchId === undefined || typeof value.dispatchId === "string") &&
+		isRecord(value.arguments) &&
+		typeof value.argumentsDigest === "string"
 	);
 }
 
@@ -259,6 +399,8 @@ export class RpcClient {
 	#pendingHostToolCalls = new Map<string, { controller: AbortController }>();
 	#requestId = 0;
 	#protocolVersion: RpcProtocolVersion = 1;
+	#managedHostToolsConfigured = false;
+	#managedHostToolsArmed = false;
 	#extensionUiListeners: Set<(req: RpcExtensionUIRequest) => void> = new Set();
 	#abortController = new AbortController();
 
@@ -284,10 +426,15 @@ export class RpcClient {
 		// short-circuit the new stdout reader (issue #4079).
 		this.#abortController = new AbortController();
 		this.#protocolVersion = 1;
+		this.#managedHostToolsConfigured = false;
+		this.#managedHostToolsArmed = false;
 
 		const rpcHostPath =
 			this.options.rpcHostPath ?? Bun.resolveSync("@oh-my-pi/pi-coding-agent/runtime-rpc-host", import.meta.dir);
+		const runtimeExecutable = validateManagedRuntimeClientLaunch(this.options, rpcHostPath);
+		const runtimeEnvironment = buildManagedRuntimeEnvironment(this.options);
 		const args = ["--mode", "rpc"];
+		if (this.options.managedRuntime) args.push("--managed");
 
 		if (this.options.provider) {
 			args.push("--provider", this.options.provider);
@@ -302,9 +449,9 @@ export class RpcClient {
 			args.push(...this.options.args);
 		}
 
-		const child = ptree.spawn(["bun", rpcHostPath, ...args], {
+		const child = ptree.spawn([runtimeExecutable, rpcHostPath, ...args], {
 			cwd: this.options.cwd,
-			env: { ...Bun.env, ...this.options.env },
+			env: runtimeEnvironment,
 			stdin: "pipe",
 		});
 		this.#process = child;
@@ -340,6 +487,12 @@ export class RpcClient {
 		void (async () => {
 			for await (const line of lines) {
 				if (!readySettled && isRecord(line) && line.type === "ready") {
+					if (
+						this.options.managedRuntime &&
+						!isManagedRuntimeReadyFrame(line, this.options.managedRuntimeLaunchBinding, child.pid)
+					) {
+						throw new Error("RPC host did not attest the managed Runtime contract");
+					}
 					protocolV2Supported = supportsRpcProtocolV2(line);
 					readySettled = true;
 					readyResolve();
@@ -428,7 +581,7 @@ export class RpcClient {
 					throw new Error("RPC protocol v2 negotiation failed");
 				this.#protocolVersion = 2;
 			}
-			if (this.#customTools.length > 0) {
+			if (this.options.managedRuntime || this.#customTools.length > 0) {
 				await this.setCustomTools(this.#customTools);
 			}
 		} catch (cause) {
@@ -939,20 +1092,68 @@ export class RpcClient {
 	 * Changes take effect before the next model call.
 	 */
 	async setCustomTools(tools: RpcClientCustomTool[]): Promise<string[]> {
-		this.#customTools = [...tools];
-		if (!this.#process) {
-			return this.#customTools.map(tool => tool.name);
+		if (
+			this.options.managedRuntime &&
+			tools.some(
+				tool =>
+					tool.capabilityKind === undefined ||
+					!tool.dispatchId ||
+					!isManagedRpcHostToolIdentifier(tool.name, "name") ||
+					!isManagedRpcHostToolIdentifier(tool.dispatchId, "dispatchId"),
+			)
+		) {
+			throw new Error(
+				"Managed Runtime host tools require ASCII names, versioned dispatch ids, and a capability kind",
+			);
 		}
-		const definitions: RpcHostToolDefinition[] = this.#customTools.map(tool => ({
+		if (this.options.managedRuntime && this.#process && this.#managedHostToolsConfigured) {
+			throw new Error("Managed Runtime host tools are immutable after initial configuration");
+		}
+		const stagedTools = [...tools];
+		const definitions: RpcHostToolDefinition[] = stagedTools.map(tool => ({
 			name: tool.name,
 			label: tool.label,
 			description: tool.description,
 			parameters: tool.parameters,
 			hidden: tool.hidden,
 			loadMode: tool.loadMode,
+			capabilityKind: tool.capabilityKind,
+			dispatchId: tool.dispatchId,
 		}));
+		const capabilityRegistryDigest = createRpcHostToolManifestDigest(definitions);
+		if (
+			this.options.managedRuntime &&
+			capabilityRegistryDigest !== this.options.managedRuntimeLaunchBinding?.capabilityRegistryDigest
+		) {
+			throw new Error("Managed Runtime host tools do not match the LaunchGuard registry digest");
+		}
+		if (!this.#process) {
+			this.#customTools = stagedTools;
+			return stagedTools.map(tool => tool.name);
+		}
 		const response = await this.#send({ type: "set_host_tools", tools: definitions });
-		return this.#getData<{ toolNames: string[] }>(response).toolNames;
+		const data = this.#getData<{ toolNames: string[]; capabilityRegistryDigest?: string }>(response);
+		if (this.options.managedRuntime && data.capabilityRegistryDigest !== capabilityRegistryDigest) {
+			throw new Error("Managed Runtime RPC host acknowledged a different capability registry digest");
+		}
+		if (this.options.managedRuntime) {
+			if (
+				!isExactManagedHostToolAcknowledgement(
+					definitions.map(tool => tool.name),
+					data.toolNames,
+				)
+			) {
+				throw new Error("Managed Runtime RPC host acknowledged a different exact tool set");
+			}
+		}
+		// Publish only after the remote refresh and exact-manifest ACK succeeded.
+		// Calls arriving before this point are rejected by #handleHostToolCall.
+		this.#customTools = stagedTools;
+		if (this.options.managedRuntime) {
+			this.#managedHostToolsConfigured = true;
+			this.#managedHostToolsArmed = true;
+		}
+		return data.toolNames;
 	}
 
 	// =========================================================================
@@ -1137,13 +1338,57 @@ export class RpcClient {
 	}
 
 	async #handleHostToolCall(request: RpcHostToolCallRequest): Promise<void> {
-		const tool = this.#customTools.find(candidate => candidate.name === request.toolName);
+		let computedArgumentsDigest: string;
+		try {
+			computedArgumentsDigest = Bun.SHA256.hash(canonicalRpcHostToolArguments(request.arguments), "hex");
+		} catch {
+			computedArgumentsDigest = "";
+		}
+		if (
+			request.argumentsDigest !== computedArgumentsDigest ||
+			(this.options.managedRuntime &&
+				(!this.#managedHostToolsArmed || request.capabilityKind === undefined || !request.dispatchId))
+		) {
+			this.#writeFrame({
+				type: "host_tool_result",
+				id: request.id,
+				result: {
+					content: [{ type: "text", text: "Host tool capability envelope failed integrity validation" }],
+					details: {},
+				},
+				isError: true,
+			} satisfies RpcHostToolResult);
+			return;
+		}
+		const tool = this.#customTools.find(candidate =>
+			this.options.managedRuntime
+				? candidate.name === request.toolName &&
+					candidate.dispatchId === request.dispatchId &&
+					candidate.capabilityKind === request.capabilityKind
+				: candidate.name === request.toolName,
+		);
 		if (!tool) {
 			this.#writeFrame({
 				type: "host_tool_result",
 				id: request.id,
 				result: {
 					content: [{ type: "text", text: `Host tool "${request.toolName}" is not registered` }],
+					details: {},
+				},
+				isError: true,
+			} satisfies RpcHostToolResult);
+			return;
+		}
+		const argumentValidation = validateJsonSchemaValue(
+			upgradeJsonSchemaTo202012(structuredClone(tool.parameters)),
+			request.arguments,
+		);
+		if (!argumentValidation.success) {
+			this.#writeFrame({
+				type: "host_tool_result",
+				id: request.id,
+				result: {
+					content: [{ type: "text", text: "Host tool arguments failed schema validation" }],
 					details: {},
 				},
 				isError: true,
@@ -1166,6 +1411,8 @@ export class RpcClient {
 		try {
 			const result = await tool.execute(request.arguments, {
 				toolCallId: request.toolCallId,
+				capabilityKind: request.capabilityKind,
+				argumentsDigest: computedArgumentsDigest,
 				signal: controller.signal,
 				sendUpdate,
 			});

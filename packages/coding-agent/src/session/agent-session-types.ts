@@ -128,6 +128,8 @@ export interface AgentSessionConfig {
 	settings: Settings;
 	/** Identity-verified, handle-bound reader for strict workspace mentions. */
 	strictWorkspaceMentionReader?: StrictWorkspaceMentionReader;
+	/** Prevent `@path` expansion from performing ambient filesystem reads. */
+	fileMentionReadsDisabled?: boolean;
 	/** Whether the session spawn policy permits the read-only `scout` subagent. Defaults to true. */
 	scoutAllowedBySpawnPolicy?: boolean;
 	/** Whether the caller explicitly requested yolo/auto-approve behavior for this session. */

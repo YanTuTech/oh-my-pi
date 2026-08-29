@@ -482,6 +482,7 @@ export class AgentSession {
 
 	#powerAssertion: MacOSPowerAssertion | undefined;
 	#strictWorkspaceMentionReader: StrictWorkspaceMentionReader | undefined;
+	#fileMentionReadsDisabled: boolean;
 
 	readonly configWarnings: string[] = [];
 
@@ -995,6 +996,7 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
 		this.#strictWorkspaceMentionReader = config.strictWorkspaceMentionReader;
+		this.#fileMentionReadsDisabled = config.fileMentionReadsDisabled === true;
 		this.#modelRegistry = config.modelRegistry;
 		this.#codexResetCoordinator = config.codexResetCoordinator ?? defaultCodexAutoRedeemCoordinator;
 		const bashHost: BashRunnerHost = {
@@ -5814,7 +5816,7 @@ export class AgentSession {
 			this.#pendingNextTurnMessages = [];
 
 			// Auto-read @filepath mentions
-			const fileMentions = extractFileMentions(expandedText);
+			const fileMentions = this.#fileMentionReadsDisabled ? [] : extractFileMentions(expandedText);
 			if (fileMentions.length > 0) {
 				const fileMentionMessages = await generateFileMentionMessages(fileMentions, this.sessionManager.getCwd(), {
 					autoResizeImages: this.settings.get("images.autoResize"),

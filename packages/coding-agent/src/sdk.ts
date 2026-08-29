@@ -8,6 +8,7 @@ import {
 	type AgentTool,
 	AppendOnlyContextManager,
 	filterProviderReplayMessages,
+	type StreamFn,
 	type ThinkingLevel,
 } from "@oh-my-pi/pi-agent-core";
 import type {
@@ -368,6 +369,7 @@ export interface WorkspaceRootIdentity {
 
 export type FileMentionReadPolicyInput =
 	| { readonly mode: "ambient" }
+	| { readonly mode: "disabled" }
 	| {
 			readonly mode: "workspace-strict";
 			readonly workspaceRoot: string;
@@ -397,6 +399,10 @@ export interface CreateAgentSessionOptions {
 	 * provider routing.
 	 */
 	getApiKey?: AgentOptions["getApiKey"];
+	/** Provider transport override. Managed runtimes use this to reach only their trusted model broker. */
+	streamFn?: StreamFn;
+	/** Disable every ambient discovery/read path for the outer-sandboxed managed Runtime. */
+	managedRuntime?: boolean;
 
 	/** Model to use. Default: from settings, else first available */
 	model?: Model;
@@ -1313,8 +1319,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			startupCredentialDisabledEvents.push(event);
 		}
 	});
-	await modelRegistry.hydrateCredentialScopedModelCaches();
-	if (!options.modelRegistry) {
+	if (!options.managedRuntime) await modelRegistry.hydrateCredentialScopedModelCaches();
+	if (!options.managedRuntime && !options.modelRegistry) {
 		modelRegistry.refreshInBackground();
 	}
 	// Kick off workspace tree discovery early. The native workspace scan returns
@@ -1322,7 +1328,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// startup does not perform a second recursive filesystem search. Subagents
 	// inherit the parent's resolved values via options.
 	const STARTUP_SCAN_DEADLINE_MS = 5000;
-	const includeWorkspaceTree = settings.get("includeWorkspaceTree") ?? false;
+	const includeWorkspaceTree = !options.managedRuntime && (settings.get("includeWorkspaceTree") ?? false);
 	const workspaceTreePromise: Promise<WorkspaceTree> = options.workspaceTree
 		? Promise.resolve(options.workspaceTree)
 		: includeWorkspaceTree
@@ -1333,9 +1339,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// Independent discoveries that depend only on cwd/agentDir — kicked off in parallel and awaited
 	// at their respective consumer sites. Their work can overlap with model resolution, secret loading,
 	// session-context build, tool creation, MCP discovery, and extension discovery.
-	const contextFilesPromise = options.contextFiles
-		? Promise.resolve(options.contextFiles)
-		: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
+	const contextFilesPromise = options.managedRuntime
+		? Promise.resolve([])
+		: options.contextFiles
+			? Promise.resolve(options.contextFiles)
+			: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
 	contextFilesPromise.catch(() => {});
 	const resolveRepoContext = async (repoCwd: string) => {
 		try {
@@ -1345,11 +1353,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			return null;
 		}
 	};
-	const activeRepoContextPromise = logger.time("resolveActiveRepoContext", resolveRepoContext, cwd);
+	const activeRepoContextPromise = options.managedRuntime
+		? Promise.resolve(null)
+		: logger.time("resolveActiveRepoContext", resolveRepoContext, cwd);
 	activeRepoContextPromise.catch(() => {});
-	const watchdogFilesPromise = logger.time("discoverWatchdogFiles", () => discoverWatchdogFiles(cwd, agentDir));
+	const watchdogFilesPromise = options.managedRuntime
+		? Promise.resolve([])
+		: logger.time("discoverWatchdogFiles", () => discoverWatchdogFiles(cwd, agentDir));
 	watchdogFilesPromise.catch(() => {});
-	const advisorConfigsPromise = logger.time("discoverAdvisorConfigs", () => discoverAdvisorConfigs(cwd, agentDir));
+	const advisorConfigsPromise = options.managedRuntime
+		? Promise.resolve({ advisors: [], sharedInstructions: undefined })
+		: logger.time("discoverAdvisorConfigs", () => discoverAdvisorConfigs(cwd, agentDir));
 	advisorConfigsPromise.catch(() => {});
 	const promptTemplatesPromise = options.promptTemplates
 		? Promise.resolve(options.promptTemplates)
@@ -1383,9 +1397,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		logger.time("sessionManager", () =>
 			SessionManager.create(cwd, SessionManager.getDefaultSessionDir(cwd, agentDir)),
 		);
-	const configuredDirs = options.additionalDirectories
-		? options.additionalDirectories
-		: settings.get("workspace.additionalDirectories");
+	const configuredDirs = options.managedRuntime
+		? []
+		: options.additionalDirectories
+			? options.additionalDirectories
+			: settings.get("workspace.additionalDirectories");
 	if (configuredDirs.length > 0) {
 		// Merge with any roots restored from the session header (resume/fork), not replace.
 		const existing = sessionManager.getAdditionalDirectories();
@@ -1585,7 +1601,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// full handshake serially — 100–300 ms transcontinental for
 		// api.anthropic.com from a residential IP. Every mode benefits
 		// (interactive, print, rpc, acp).
-		preconnectModelHost(model.baseUrl);
+		if (!options.managedRuntime) preconnectModelHost(model.baseUrl);
 	}
 
 	let skills: Skill[];
@@ -2140,13 +2156,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// effect, so a cold --model/provider resume must see the same fresh SQLite
 		// cache that `omp models find` uses before the online refresh continues in
 		// the background.
-		await modelRegistry.refreshRuntimeProviders("offline");
+		if (!options.managedRuntime) await modelRegistry.refreshRuntimeProviders("offline");
 		// Online runtime discovery must not steal the event loop from the first UI
 		// frame. Explicit deferred model selectors still start it immediately
 		// because they await it below; normal UI startup receives a one-shot
 		// starter in CreateAgentSessionResult and calls it after mode.init paints.
 		let runtimeDiscoveryPromise: Promise<void> | undefined;
 		const startRuntimeDiscovery = (): Promise<void> => {
+			if (options.managedRuntime) return Promise.resolve();
 			runtimeDiscoveryPromise ??= modelRegistry.refreshRuntimeProviders().catch(error => {
 				logger.warn("runtime provider discovery failed", {
 					error: error instanceof Error ? error.message : String(error),
@@ -2154,7 +2171,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			});
 			return runtimeDiscoveryPromise;
 		};
-		if (!options.hasUI || deferredModelPatterns.length > 0) {
+		if (!options.managedRuntime && (!options.hasUI || deferredModelPatterns.length > 0)) {
 			void startRuntimeDiscovery();
 		}
 
@@ -2193,7 +2210,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 								? resolveProvisionalAutoLevel(restoredModel)
 								: resolveThinkingLevelForModel(restoredModel, effectiveThinkingLevel),
 						);
-						preconnectModelHost(restoredModel.baseUrl);
+						if (!options.managedRuntime) preconnectModelHost(restoredModel.baseUrl);
 						return true;
 					}
 				}
@@ -2221,7 +2238,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						}
 					}
 				}
-				if (candidateProviders.size > 0) {
+				if (!options.managedRuntime && candidateProviders.size > 0) {
 					// This skips the static reload and all-other-runtime restore
 					// performed by `refreshProvider`, so unrelated runtime providers
 					// continue independently.
@@ -2270,7 +2287,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					return Boolean(resolved.model);
 				}),
 			);
-			if (!runtimeResolved && modelRegistry.getDiscoverableProviders().length > 0) {
+			if (!options.managedRuntime && !runtimeResolved && modelRegistry.getDiscoverableProviders().length > 0) {
 				await logger.time("resolveModelDiscoveryFallbackNonRuntime", () =>
 					modelRegistry.refresh("online-if-uncached"),
 				);
@@ -2517,7 +2534,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						? resolveProvisionalAutoLevel(selectedModel)
 						: resolveThinkingLevelForModel(selectedModel, effectiveThinkingLevel),
 				);
-				preconnectModelHost(selectedModel.baseUrl);
+				if (!options.managedRuntime) preconnectModelHost(selectedModel.baseUrl);
 				break;
 			}
 			if (!model) {
@@ -2569,7 +2586,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 						? resolveProvisionalAutoLevel(resolvedDefaultModel)
 						: resolveThinkingLevelForModel(resolvedDefaultModel, effectiveThinkingLevel),
 				);
-				preconnectModelHost(resolvedDefaultModel.baseUrl);
+				if (!options.managedRuntime) preconnectModelHost(resolvedDefaultModel.baseUrl);
 				return true;
 			};
 
@@ -2594,6 +2611,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				// configured default — never pays for it.
 				const defaultRoleConfigured = Boolean(settings.getModelRole("default"));
 				if (
+					!options.managedRuntime &&
 					!hasExplicitModel &&
 					(defaultRoleConfigured || !pick) &&
 					modelRegistry.getDiscoverableProviders().length > 0
@@ -2626,7 +2644,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 		}
 
-		if (model) {
+		if (model && !options.managedRuntime) {
 			const selectedModel = model;
 			const refreshedModel = await logger.time("refreshInitialModelMetadata", () =>
 				modelRegistry.refreshSelectedModelMetadata(selectedModel),
@@ -2959,10 +2977,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			rebuildOptions?: { directToolNames?: readonly string[] },
 		): Promise<BuildSystemPromptResult> => {
 			const promptCwd = sessionManager.getCwd();
-			const activeRepoContext = hasSession
-				? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
-				: initialActiveRepoContext;
-			if (hasSession && options.contextFiles === undefined) {
+			const activeRepoContext = options.managedRuntime
+				? initialActiveRepoContext
+				: hasSession
+					? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
+					: initialActiveRepoContext;
+			if (!options.managedRuntime && hasSession && options.contextFiles === undefined) {
 				contextFiles = await logger.time("discoverContextFiles", discoverContextFiles, promptCwd, agentDir, [
 					...(settings.get("disabledExtensions") ?? []),
 				]);
@@ -3360,7 +3380,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// each LLM HTTP request — not the whole subagent lifecycle — holds the
 		// slot, preventing the nested-spawn deadlock from issue #3749.
 		const settingsAwareStreamFn = wrapStreamFnWithBlobUrlFallback(
-			wrapStreamFnWithProviderConcurrency(settings, createSettingsAwareStreamFn(settings)),
+			wrapStreamFnWithProviderConcurrency(settings, createSettingsAwareStreamFn(settings, options.streamFn)),
 			blobBroker,
 		);
 		const codeModeState: { namespacesInfo?: unknown } = {};
@@ -3560,6 +3580,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			serviceTierByFamily: initialServiceTierByFamily,
 			sessionManager,
 			strictWorkspaceMentionReader,
+			fileMentionReadsDisabled: fileMentionReadPolicy.mode === "disabled",
 			initialAdvisorCosts,
 			settings,
 			autoApprove: options.autoApprove,

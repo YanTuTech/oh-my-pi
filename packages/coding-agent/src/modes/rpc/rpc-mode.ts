@@ -31,12 +31,19 @@ import type { AgentSessionEvent } from "../../session/agent-session-events";
 import { SKILL_PROMPT_MESSAGE_TYPE, USER_INTERRUPT_LABEL } from "../../session/messages";
 import { executeAcpBuiltinSlashCommand } from "../../slash-commands/acp-builtins";
 import { buildAvailableSlashCommands } from "../../slash-commands/available-commands";
-import { defaultLoadModeForToolName } from "../../tools/essential-tools";
 import type { EventBus } from "../../utils/event-bus";
 import { calculateTokensPerSecond } from "../../utils/token-rate";
 import { initializeExtensions } from "../runtime-init";
-import { isRpcHostToolResult, isRpcHostToolUpdate, RpcHostToolBridge } from "./host-tools";
+import {
+	createRpcHostToolManifestDigest,
+	isManagedRpcHostToolIdentifier,
+	isRpcHostToolResult,
+	isRpcHostToolUpdate,
+	normalizeRpcHostToolDefinitions,
+	RpcHostToolBridge,
+} from "./host-tools";
 import { isRpcHostUriResult, RpcHostUriBridge } from "./host-uris";
+import { isManagedRuntimeCommandAllowed } from "./managed-runtime";
 import { MAX_RPC_FRAME_BYTES, MAX_RPC_REASSEMBLED_BYTES, RpcFrameEncoder } from "./rpc-frame";
 import { claimRpcInput, readRpcInputFrames } from "./rpc-input";
 import { pageRpcMessages, RPC_MESSAGES_PAGE_BUSY_ERROR, RpcMessagesPageError } from "./rpc-messages";
@@ -48,12 +55,12 @@ import type {
 	RpcExtensionUISelectOptionDetail,
 	RpcHostToolCallRequest,
 	RpcHostToolCancelRequest,
-	RpcHostToolDefinition,
 	RpcHostToolResult,
 	RpcHostToolUpdate,
 	RpcHostUriCancelRequest,
 	RpcHostUriRequest,
 	RpcHostUriResult,
+	RpcManagedRuntimeAttestationV1,
 	RpcResponse,
 	RpcSessionState,
 	RpcSubagentSubscriptionLevel,
@@ -109,6 +116,8 @@ export type RpcSessionEventProjection =
 export interface RunRpcModeOptions {
 	projectSessionEvent(event: AgentSessionEvent): RpcSessionEventProjection;
 	terminateOnProjectionFailure?(error: unknown): never;
+	/** Restrict RPC to host-managed capabilities and attest the LaunchGuard binding. */
+	managedRuntime?: RpcManagedRuntimeAttestationV1;
 }
 
 export const forwardAllRpcSessionEvents: RunRpcModeOptions = {
@@ -549,31 +558,6 @@ export async function handleRpcSessionChange(
 	throw new Error("Unsupported RPC session change command");
 }
 
-function normalizeHostToolDefinitions(tools: RpcHostToolDefinition[]): RpcHostToolDefinition[] {
-	return tools.map((tool, index) => {
-		const name = typeof tool.name === "string" ? tool.name.trim() : "";
-		if (!name) {
-			throw new Error(`Host tool at index ${index} must provide a non-empty name`);
-		}
-		const description = typeof tool.description === "string" ? tool.description.trim() : "";
-		if (!description) {
-			throw new Error(`Host tool "${name}" must provide a non-empty description`);
-		}
-		if (!tool.parameters || typeof tool.parameters !== "object" || Array.isArray(tool.parameters)) {
-			throw new Error(`Host tool "${name}" must provide a JSON Schema object`);
-		}
-		const label = typeof tool.label === "string" && tool.label.trim() ? tool.label.trim() : name;
-		return {
-			name,
-			label,
-			description,
-			parameters: tool.parameters,
-			hidden: tool.hidden === true,
-			loadMode: defaultLoadModeForToolName(name, tool.loadMode),
-		};
-	});
-}
-
 function parseValueDialogResponse(
 	response: RpcExtensionUIResponse,
 	dialogOptions: ExtensionUIDialogOptions | undefined,
@@ -790,6 +774,11 @@ export async function runRpcMode(
 			supportedProtocolVersions: [1, 2],
 			maxFrameBytes: MAX_RPC_FRAME_BYTES,
 			maxReassembledFrameBytes: MAX_RPC_REASSEMBLED_BYTES,
+			...(options.managedRuntime
+				? {
+						managedRuntime: options.managedRuntime,
+					}
+				: {}),
 		}),
 	);
 	const output = (obj: RpcResponse | RpcExtensionUIRequest | object) => {
@@ -818,6 +807,7 @@ export async function runRpcMode(
 
 	const pendingExtensionRequests = new RpcPendingExtensionRequests();
 	const hostToolBridge = new RpcHostToolBridge(output);
+	let managedHostToolsConfigured = false;
 	const hostUriBridge = new RpcHostUriBridge(output);
 	const subagentRegistry = eventBus ? new RpcSubagentRegistry(eventBus, output) : undefined;
 
@@ -1057,6 +1047,14 @@ export async function runRpcMode(
 	// Handle a single command
 	const handleCommand = async (command: RpcCommand): Promise<RpcResponse> => {
 		const id = command.id;
+		if (options.managedRuntime && !isManagedRuntimeCommandAllowed(command.type)) {
+			return error(
+				id,
+				command.type,
+				`RPC command "${command.type}" is unavailable in the managed Runtime`,
+				"managed_runtime_denied",
+			);
+		}
 
 		switch (command.type) {
 			case "negotiate_protocol": {
@@ -1070,6 +1068,23 @@ export async function runRpcMode(
 			// =================================================================
 
 			case "prompt": {
+				if (options.managedRuntime) {
+					// Managed hosts own every command and capability decision. Treat
+					// slash-prefixed input as model text so it cannot reach ambient
+					// skill, extension, config, login, or shell command handlers.
+					watchAndReportLocalOnlyPromptResult({
+						id,
+						startPrompt: () =>
+							session.prompt(command.message, {
+								images: command.images,
+								streamingBehavior: command.streamingBehavior,
+							}),
+						output,
+						onError: promptError => output(error(id, "prompt", promptError.message)),
+						extensionUserMessageTracker,
+					});
+					return success(id, "prompt");
+				}
 				const skillResult = await tryRunRpcSkillCommand(session, command.message, command.streamingBehavior);
 				if (skillResult) {
 					return success(id, "prompt", skillResult);
@@ -1217,10 +1232,60 @@ export async function runRpcMode(
 			}
 
 			case "set_host_tools": {
-				const tools = normalizeHostToolDefinitions(command.tools);
-				const rpcTools = hostToolBridge.setTools(tools);
-				await session.refreshRpcHostTools(rpcTools);
-				return success(id, "set_host_tools", { toolNames: tools.map(tool => tool.name) });
+				if (options.managedRuntime && managedHostToolsConfigured) {
+					return error(
+						id,
+						"set_host_tools",
+						"Managed Runtime host tools are immutable after initial configuration",
+						"managed_runtime_tools_locked",
+					);
+				}
+				const tools = normalizeRpcHostToolDefinitions(command.tools);
+				if (
+					options.managedRuntime &&
+					tools.some(
+						tool =>
+							tool.capabilityKind === undefined ||
+							!tool.dispatchId ||
+							!isManagedRpcHostToolIdentifier(tool.name, "name") ||
+							!isManagedRpcHostToolIdentifier(tool.dispatchId, "dispatchId"),
+					)
+				) {
+					return error(
+						id,
+						"set_host_tools",
+						"Managed Runtime host tools require ASCII names, versioned dispatch ids, and a capability kind",
+						"managed_runtime_invalid_tool_manifest",
+					);
+				}
+				const capabilityRegistryDigest = createRpcHostToolManifestDigest(tools);
+				if (
+					options.managedRuntime &&
+					capabilityRegistryDigest !== options.managedRuntime.capabilityRegistryDigest
+				) {
+					return error(
+						id,
+						"set_host_tools",
+						"Managed Runtime host tools do not match the LaunchGuard registry digest",
+						"managed_runtime_tool_manifest_mismatch",
+					);
+				}
+				// Managed setup is a one-attempt transaction. A failed refresh leaves
+				// the bridge unarmed and requires a fresh worker; no partially installed
+				// manifest may be retried in this process.
+				if (options.managedRuntime) managedHostToolsConfigured = true;
+				const stage = hostToolBridge.stageTools(tools);
+				try {
+					await session.refreshRpcHostTools(stage.tools);
+					stage.commit();
+				} catch (cause) {
+					stage.discard();
+					throw cause;
+				}
+				return success(id, "set_host_tools", {
+					toolNames: tools.map(tool => tool.name),
+					capabilityRegistryDigest,
+				});
 			}
 
 			case "set_host_uri_schemes": {

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a product-inaccessible managed RPC Runtime validation profile with zero native tools, atomically armed immutable host-tool registration, restricted command routing, an allow-listed synthetic environment, and Unix-socket-only model routing. Release remains gated on LaunchGuard code-identity and broker-peer authentication.
 - Added credential-free DuckDuckGo and explicit Bing support to the minimal headless search runtime.
 - Added an explicit append-only transcript declaration and width-independent stable-row API for components that can guarantee an immutable history prefix across later updates.
 - Added `:img` read selector to rasterize local SVG/SVGZ files for vision input.

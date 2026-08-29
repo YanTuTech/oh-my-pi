@@ -1,165 +1,66 @@
 /** Headless process entrypoint for {@link RpcClient}. */
 
+import * as path from "node:path";
+import { AuthStorage } from "@oh-my-pi/pi-ai";
 import { ModelRegistry } from "./config/model-registry";
 import { resolveCliModel } from "./config/model-resolver";
 import { Settings } from "./config/settings";
 import { applyRpcDefaultSettingOverrides } from "./modes/protocol-settings";
+import { createManagedModelBrokerStreamFn } from "./modes/rpc/managed-model-broker";
+import { readManagedRuntimeAttestation } from "./modes/rpc/managed-runtime";
 import { claimRpcInput } from "./modes/rpc/rpc-input";
 import { forwardAllRpcSessionEvents, runRpcMode } from "./modes/rpc/rpc-mode";
-import type { CreateAgentSessionOptions } from "./sdk";
+import { parseRuntimeRpcArgs } from "./runtime-rpc-args";
 import { createAgentSession, discoverAuthStorage } from "./sdk";
 import { SessionManager } from "./session/session-manager";
-import { parseConfiguredThinkingLevel } from "./thinking";
 import { EventBus } from "./utils/event-bus";
-
-interface RuntimeRpcArgs {
-	provider?: string;
-	model?: string;
-	sessionDir?: string;
-	providerSessionId?: string;
-	providerPromptCacheKey?: string;
-	customSystemPrompt?: string;
-	appendSystemPrompt?: string;
-	thinkingLevel?: CreateAgentSessionOptions["thinkingLevel"];
-	toolNames?: string[];
-	extensionPaths: string[];
-	noSession: boolean;
-	continueSession: boolean;
-	disableExtensionDiscovery: boolean;
-	disableSkills: boolean;
-	disableRules: boolean;
-	disableLsp: boolean;
-	disableTitle: boolean;
-	autoApprove: boolean;
-}
-
-function parseRuntimeRpcArgs(argv: readonly string[]): RuntimeRpcArgs {
-	const result: RuntimeRpcArgs = {
-		extensionPaths: [],
-		noSession: false,
-		continueSession: false,
-		disableExtensionDiscovery: false,
-		disableSkills: false,
-		disableRules: false,
-		disableLsp: false,
-		disableTitle: false,
-		autoApprove: false,
-	};
-	const takeValue = (flag: string, index: number): string => {
-		const value = argv[index + 1];
-		if (!value) throw new Error(`${flag} requires a value`);
-		return value;
-	};
-	for (let index = 0; index < argv.length; index++) {
-		const arg = argv[index];
-		if (arg === "--mode") {
-			if (takeValue(arg, index) !== "rpc") throw new Error("Runtime RPC host only supports --mode rpc");
-			index++;
-			continue;
-		}
-		if (arg === "--provider") {
-			result.provider = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--model") {
-			result.model = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--session-dir") {
-			result.sessionDir = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--provider-session-id") {
-			result.providerSessionId = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--provider-prompt-cache-key") {
-			result.providerPromptCacheKey = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--system-prompt") {
-			result.customSystemPrompt = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--append-system-prompt") {
-			result.appendSystemPrompt = takeValue(arg, index++);
-			continue;
-		}
-		if (arg === "--thinking") {
-			const value = takeValue(arg, index++);
-			const thinkingLevel = parseConfiguredThinkingLevel(value);
-			if (!thinkingLevel) throw new Error(`Invalid Runtime thinking level: ${value}`);
-			result.thinkingLevel = thinkingLevel;
-			continue;
-		}
-		if (arg === "--tools") {
-			result.toolNames = takeValue(arg, index++)
-				.split(",")
-				.map(name => name.trim())
-				.filter(Boolean);
-			continue;
-		}
-		if (arg === "--extension") {
-			const extensionPath = takeValue(arg, index++);
-			result.extensionPaths.push(extensionPath);
-			continue;
-		}
-		if (arg === "--no-session") {
-			result.noSession = true;
-			continue;
-		}
-		if (arg === "--continue") {
-			result.continueSession = true;
-			continue;
-		}
-		if (arg === "--no-tools") {
-			result.toolNames = [];
-			continue;
-		}
-		if (arg === "--no-extensions") {
-			result.disableExtensionDiscovery = true;
-			continue;
-		}
-		if (arg === "--no-skills") {
-			result.disableSkills = true;
-			continue;
-		}
-		if (arg === "--no-rules") {
-			result.disableRules = true;
-			continue;
-		}
-		if (arg === "--no-lsp") {
-			result.disableLsp = true;
-			continue;
-		}
-		if (arg === "--no-title") {
-			result.disableTitle = true;
-			continue;
-		}
-		if (arg === "--auto-approve") {
-			result.autoApprove = true;
-			continue;
-		}
-		if (arg === "--no-color") continue;
-		throw new Error(`Unknown Runtime RPC option: ${arg}`);
-	}
-	if (result.provider && !result.model) throw new Error("--provider requires --model");
-	if (result.noSession && result.continueSession) throw new Error("--continue cannot be combined with --no-session");
-	if (result.disableExtensionDiscovery && result.extensionPaths.length > 0) {
-		throw new Error("--no-extensions cannot be combined with --extension");
-	}
-	return result;
-}
 
 export async function runRuntimeRpcHost(argv: readonly string[]): Promise<never> {
 	const input = claimRpcInput();
 	const parsed = parseRuntimeRpcArgs(argv);
 	const cwd = process.cwd();
 	const eventBus = new EventBus();
-	const settings = await Settings.loadIsolated({ cwd });
+	const settings = parsed.managedRuntime
+		? Settings.isolated({
+				includeWorkspaceTree: false,
+				"providers.openaiWebsockets": "off",
+				"power.sleepPrevention": "off",
+				"retry.enabled": false,
+				"retry.modelFallback": false,
+				"retry.usageAwareFallback": false,
+			})
+		: await Settings.loadIsolated({ cwd });
 	applyRpcDefaultSettingOverrides(settings);
-	const authStorage = await discoverAuthStorage();
-	const modelRegistry = new ModelRegistry(authStorage, undefined, { settings });
+	const brokerSocket = parsed.managedRuntime ? Bun.env.OMP_MANAGED_MODEL_BROKER_SOCKET : undefined;
+	const managedRuntimeAttestation = parsed.managedRuntime
+		? readManagedRuntimeAttestation(Bun.env, process.pid)
+		: undefined;
+	if (parsed.managedRuntime) {
+		if (!parsed.provider || !parsed.model) {
+			throw new Error("Managed Runtime requires a host-selected provider and model");
+		}
+		if (!parsed.sessionDir || !path.isAbsolute(parsed.sessionDir)) {
+			throw new Error("Managed Runtime requires an absolute session directory");
+		}
+		if (!brokerSocket || !path.isAbsolute(brokerSocket)) {
+			throw new Error("Managed Runtime requires an absolute model broker socket path");
+		}
+	}
+	const authStorage = parsed.managedRuntime
+		? await AuthStorage.create(path.join(parsed.sessionDir as string, "managed-auth.db"), {
+				configValueResolver: async () => undefined,
+				sourceLabel: "managed-runtime",
+			})
+		: await discoverAuthStorage();
+	if (parsed.managedRuntime) authStorage.setRuntimeApiKey(parsed.provider as string, "managed-model-broker");
+	const modelRegistry = new ModelRegistry(authStorage, undefined, {
+		ignoreLocalModelConfig: parsed.managedRuntime,
+		settings,
+		cacheDbPath: parsed.managedRuntime ? path.join(parsed.sessionDir as string, "managed-model-cache.db") : undefined,
+		fetch: parsed.managedRuntime
+			? () => Promise.reject(new Error("Managed Runtime model discovery network is disabled"))
+			: undefined,
+	});
 	const sessionManager = parsed.noSession
 		? SessionManager.inMemory(cwd)
 		: parsed.continueSession
@@ -170,7 +71,7 @@ export async function runRuntimeRpcHost(argv: readonly string[]): Promise<never>
 			? `${parsed.provider}/${parsed.model}`
 			: parsed.model
 		: undefined;
-	if (parsed.disableTitle) Bun.env.PI_NO_TITLE = "1";
+	if (parsed.managedRuntime || parsed.disableTitle) Bun.env.PI_NO_TITLE = "1";
 	const { session, setToolUIContext } = await createAgentSession({
 		cwd,
 		eventBus,
@@ -179,19 +80,35 @@ export async function runRuntimeRpcHost(argv: readonly string[]): Promise<never>
 		modelRegistry,
 		sessionManager,
 		settings,
+		agentDir: parsed.managedRuntime ? path.join(parsed.sessionDir as string, "agent") : undefined,
+		managedRuntime: parsed.managedRuntime,
+		additionalDirectories: parsed.managedRuntime ? [] : undefined,
+		fileMentionReadPolicy: parsed.managedRuntime ? { mode: "disabled" } : undefined,
+		contextFiles: parsed.managedRuntime ? [] : undefined,
+		workspaceTree: parsed.managedRuntime
+			? { rootPath: cwd, rendered: "", truncated: false, totalLines: 0, agentsMdFiles: [] }
+			: undefined,
+		promptTemplates: parsed.managedRuntime ? [] : undefined,
+		slashCommands: parsed.managedRuntime ? [] : undefined,
 		providerSessionId: parsed.providerSessionId,
 		providerPromptCacheKey: parsed.providerPromptCacheKey,
 		providerPromptCacheKeySource: parsed.providerPromptCacheKey ? "explicit" : undefined,
 		customSystemPrompt: parsed.customSystemPrompt,
 		appendSystemPrompt: parsed.appendSystemPrompt,
 		thinkingLevel: parsed.thinkingLevel,
-		toolNames: parsed.toolNames,
-		disableExtensionDiscovery: parsed.disableExtensionDiscovery,
-		additionalExtensionPaths: parsed.extensionPaths,
-		skills: parsed.disableSkills ? [] : undefined,
-		rules: parsed.disableRules ? [] : undefined,
-		enableLsp: parsed.disableLsp ? false : undefined,
-		autoApprove: parsed.autoApprove,
+		getApiKey: parsed.managedRuntime ? () => "managed-model-broker" : undefined,
+		streamFn: parsed.managedRuntime ? createManagedModelBrokerStreamFn(brokerSocket as string) : undefined,
+		toolNames: parsed.managedRuntime ? [] : parsed.toolNames,
+		disableExtensionDiscovery: parsed.managedRuntime || parsed.disableExtensionDiscovery,
+		additionalExtensionPaths: parsed.managedRuntime ? [] : parsed.extensionPaths,
+		skills: parsed.managedRuntime || parsed.disableSkills ? [] : undefined,
+		rules: parsed.managedRuntime || parsed.disableRules ? [] : undefined,
+		enableLsp: parsed.managedRuntime || parsed.disableLsp ? false : undefined,
+		enableMCP: parsed.managedRuntime ? false : undefined,
+		enableIrc: parsed.managedRuntime ? false : undefined,
+		restrictToolNames: parsed.managedRuntime ? true : undefined,
+		allowRestrictedCustomTools: parsed.managedRuntime ? false : undefined,
+		autoApprove: parsed.managedRuntime ? false : parsed.autoApprove,
 	});
 	if (parsed.model) {
 		const resolved = resolveCliModel({
@@ -205,7 +122,10 @@ export async function runRuntimeRpcHost(argv: readonly string[]): Promise<never>
 			throw new Error(resolved.error);
 		}
 	}
-	return runRpcMode(session, setToolUIContext, eventBus, input, forwardAllRpcSessionEvents);
+	return runRpcMode(session, setToolUIContext, eventBus, input, {
+		...forwardAllRpcSessionEvents,
+		managedRuntime: managedRuntimeAttestation,
+	});
 }
 
 if (import.meta.main) {

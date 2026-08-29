@@ -65,6 +65,29 @@ function rootIdentity(workspaceRoot: string): WorkspaceRootIdentity {
 }
 
 describe("createAgentSession fileMentionReadPolicy", () => {
+	test("managed Runtime ignores ambient file mentions and discovered context", async () => {
+		const root = await tempDir("managed-disabled");
+		await fs.writeFile(path.join(root, "note.txt"), "MANAGED-RUNTIME-MUST-NOT-READ");
+		const created = await createAgentSession({
+			...sessionOptions(root),
+			managedRuntime: true,
+			fileMentionReadPolicy: { mode: "disabled" },
+			contextFiles: [{ path: path.join(root, "AGENTS.md"), content: "AMBIENT-CONTEXT-MUST-NOT-INJECT" }],
+		});
+		try {
+			const mock = createMockModel({ responses: [{ content: ["done"] }] });
+			vi.spyOn(created.session.agent, "streamFn").mockImplementation(mock.stream);
+
+			await created.session.prompt('@"note.txt"');
+
+			expect(created.session.messages.some(message => message.role === "fileMention")).toBe(false);
+			expect(JSON.stringify(created.session.messages)).not.toContain("MANAGED-RUNTIME-MUST-NOT-READ");
+			expect(created.session.agent.state.systemPrompt.join("\n")).not.toContain("AMBIENT-CONTEXT-MUST-NOT-INJECT");
+		} finally {
+			await created.session.dispose();
+		}
+	});
+
 	test("keeps strict auto-read bound to the verified root handle for the session lifetime", async () => {
 		const parent = await tempDir("strict-parent");
 		const root = path.join(parent, "workspace");

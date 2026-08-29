@@ -148,6 +148,28 @@ export interface RpcReadyFrame {
 	supportedProtocolVersions: [1, 2];
 	maxFrameBytes: number;
 	maxReassembledFrameBytes: number;
+	/** Present only for the restricted host-managed Runtime profile. */
+	managedRuntime?: RpcManagedRuntimeAttestationV1;
+}
+
+export interface RpcManagedRuntimeLaunchBindingV1 {
+	contractVersion: 1;
+	protocolEpoch: 1;
+	runtimeBundleDigest: string;
+	buildGraphDigest: string;
+	capabilityRegistryDigest: string;
+	launchTicketDigest: string;
+	channelBindingDigest: string;
+	workerGeneration: number;
+	policyGeneration: number;
+}
+
+export interface RpcManagedRuntimeAttestationV1 extends RpcManagedRuntimeLaunchBindingV1 {
+	processId: number;
+	nativeTools: false;
+	hostToolsMutable: false;
+	ambientDiscovery: false;
+	modelTransport: "unix-domain-socket";
 }
 
 export interface RpcChunkFrame {
@@ -445,6 +467,26 @@ export type RpcExtensionUIRequest =
 // Host Tool Frames (bidirectional)
 // ============================================================================
 
+export const RPC_CAPABILITY_KINDS_V1 = [
+	"fs.read_regular",
+	"fs.list",
+	"fs.atomic_replace",
+	"fs.delete",
+	"process.exec",
+	"git.operation",
+	"eval.execute",
+	"mcp.invoke",
+	"pty.start",
+	"background.start",
+	"plugin.invoke",
+	"browser.invoke",
+	"computer.invoke",
+	"model.invoke",
+	"network.egress.search",
+	"host.control",
+] as const;
+export type RpcCapabilityKindV1 = (typeof RPC_CAPABILITY_KINDS_V1)[number];
+
 export interface RpcHostToolDefinition {
 	name: string;
 	label?: string;
@@ -453,6 +495,10 @@ export interface RpcHostToolDefinition {
 	hidden?: boolean;
 	/** How this host tool is presented when enabled; omission normalizes to `"discoverable"` at the adapter boundary. */
 	loadMode?: ToolLoadMode;
+	/** Host-owned capability classification; required by the managed Runtime profile. */
+	capabilityKind?: RpcCapabilityKindV1;
+	/** Stable signed-manifest route identity; required by the managed Runtime profile. */
+	dispatchId?: string;
 }
 
 /** Emitted by the RPC server when it needs the host to execute a registered tool. */
@@ -461,7 +507,10 @@ export interface RpcHostToolCallRequest {
 	id: string;
 	toolCallId: string;
 	toolName: string;
+	capabilityKind?: RpcCapabilityKindV1;
+	dispatchId?: string;
 	arguments: Record<string, unknown>;
+	argumentsDigest: string;
 }
 
 /** Emitted by the RPC server when a pending host tool call should be aborted. */

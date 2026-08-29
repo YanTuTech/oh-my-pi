@@ -24,6 +24,53 @@ afterEach(async () => {
 });
 
 describe("RpcHostToolBridge", () => {
+	it("keeps a staged manifest unarmed until commit and permanently rejects a discarded stage", async () => {
+		const frames: Array<RpcHostToolCallRequest | RpcHostToolCancelRequest> = [];
+		const bridge = new RpcHostToolBridge(frame => frames.push(frame));
+		const definition = {
+			name: "staged_host_tool",
+			description: "Exercises atomic manifest publication",
+			parameters: { type: "object", properties: {}, additionalProperties: false },
+		};
+		const discarded = bridge.stageTools([definition]);
+		await expect(discarded.tools[0]!.execute("toolu_discarded", {})).rejects.toThrow("is not armed");
+		discarded.discard();
+		await expect(discarded.tools[0]!.execute("toolu_still_discarded", {})).rejects.toThrow("is not armed");
+		expect(frames).toEqual([]);
+
+		const committed = bridge.stageTools([definition]);
+		committed.commit();
+		const execution = committed.tools[0]!.execute("toolu_committed", {});
+		expect(frames).toHaveLength(1);
+		const request = frames[0];
+		if (request?.type !== "host_tool_call") throw new Error("Expected host_tool_call frame");
+		bridge.handleResult({
+			type: "host_tool_result",
+			id: request.id,
+			result: { content: [{ type: "text", text: "committed" }] },
+		});
+		await expect(execution).resolves.toMatchObject({ content: [{ type: "text", text: "committed" }] });
+	});
+
+	it("rejects oversized capability arguments before emitting a host frame", async () => {
+		const frames: Array<RpcHostToolCallRequest | RpcHostToolCancelRequest> = [];
+		const bridge = new RpcHostToolBridge(frame => frames.push(frame));
+		const [tool] = bridge.setTools([
+			{
+				name: "bounded_host_tool",
+				description: "Exercises the capability argument resource bound",
+				parameters: { type: "object", properties: { value: { type: "string" } } },
+				capabilityKind: "host.control",
+				dispatchId: "host.control.bounded.v1",
+			},
+		]);
+
+		await expect(tool.execute("toolu_oversized", { value: "x".repeat(256 * 1024 + 1) })).rejects.toThrow(
+			"Canonical JSON string limit exceeded",
+		);
+		expect(frames).toEqual([]);
+	});
+
 	it("forwards host tool updates and results to the pending execution", async () => {
 		const frames: Array<RpcHostToolCallRequest | RpcHostToolCancelRequest> = [];
 		const bridge = new RpcHostToolBridge(frame => {
@@ -47,7 +94,7 @@ describe("RpcHostToolBridge", () => {
 		]);
 
 		const updates: RpcHostToolUpdate["partialResult"][] = [];
-		const execution = tool.execute("toolu_1", { left: 2, right: 3 }, undefined, update => {
+		const execution = tool.execute("toolu_1", { right: 3, left: 2 }, undefined, update => {
 			updates.push(update);
 		});
 
@@ -56,6 +103,7 @@ describe("RpcHostToolBridge", () => {
 		if (request?.type !== "host_tool_call") {
 			throw new Error("Expected host_tool_call frame");
 		}
+		expect(request.argumentsDigest).toBe(Bun.SHA256.hash('{"left":2,"right":3}', "hex"));
 
 		bridge.handleUpdate({
 			type: "host_tool_update",
@@ -123,6 +171,7 @@ describe("RpcClient custom tools", () => {
 			`
 const encoder = new TextEncoder();
 let buffer = "";
+let promptCount = 0;
 
 function write(frame) {
 	process.stdout.write(JSON.stringify(frame) + "\\n");
@@ -153,6 +202,8 @@ function handle(frame) {
 		return;
 	}
 	if (frame.type === "prompt") {
+		promptCount++;
+		const args = promptCount === 1 ? { message: "hello" } : { message: 5 };
 		write({ id: frame.id, type: "response", command: "prompt", success: true });
 		write({ type: "agent_start" });
 		write({
@@ -160,7 +211,8 @@ function handle(frame) {
 			id: "host-call-1",
 			toolCallId: "toolu_host_1",
 			toolName: "echo_host",
-			arguments: { message: "hello" },
+			arguments: args,
+			argumentsDigest: Bun.SHA256.hash(JSON.stringify(args), "hex"),
 		});
 		return;
 	}
@@ -188,6 +240,7 @@ function handle(frame) {
 `,
 		);
 
+		let executions = 0;
 		const client = new RpcClient({
 			rpcHostPath: scriptPath,
 			customTools: [
@@ -203,6 +256,7 @@ function handle(frame) {
 						additionalProperties: false,
 					},
 					async execute(args, context) {
+						executions++;
 						context.sendUpdate(`working:${args.message}`);
 						return `host:${args.message}`;
 					},
@@ -229,6 +283,17 @@ function handle(frame) {
 			expect(toolUpdate?.partialResult).toEqual({
 				content: [{ type: "text", text: "working:hello" }],
 			});
+
+			const invalidEvents = await client.promptAndWait("Trigger invalid host tool arguments");
+			const invalidEnd = invalidEvents.find(
+				(event): event is Extract<AgentEvent, { type: "tool_execution_end" }> =>
+					event.type === "tool_execution_end",
+			);
+			expect(invalidEnd?.isError).toBe(true);
+			expect(invalidEnd?.result.content).toEqual([
+				{ type: "text", text: "Host tool arguments failed schema validation" },
+			]);
+			expect(executions).toBe(1);
 		} finally {
 			await client.stop();
 		}
