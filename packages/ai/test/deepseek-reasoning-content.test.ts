@@ -464,6 +464,32 @@ describe("DeepSeek reasoning_content tool-call replay", () => {
 			expect(assistant).toBeDefined();
 			expect(assistant?.content).toBe("");
 		});
+
+		it("never replays a visible placeholder as assistant content for DeepSeek direct", () => {
+			// Regression: text-less tool-call turns used to send content "." on the
+			// wire. That placeholder is replayed into the model's context on every
+			// later turn, and DeepSeek V4 copies it back verbatim as visible output.
+			// Any non-empty placeholder must therefore stay invisible.
+			const model = getBundledModel("deepseek", "deepseek-v4-flash") as Model<"openai-completions">;
+			const compat = model.compat;
+			expect(compat.requiresAssistantContentForToolCalls).toBe(true);
+
+			const msg = assistantToolCall(model, [
+				{
+					type: "toolCall",
+					id: "call_no_content_direct",
+					name: "read",
+					arguments: { path: "/tmp/x" },
+				} as ToolCall,
+			]);
+			const messages = convertMessages(model, { messages: [msg] }, compat);
+			const assistant = findOpenAICompletionAssistantWireMessage(messages);
+			expect(assistant).toBeDefined();
+			const content = assistant?.content;
+			expect(typeof content).toBe("string");
+			// Only whitespace / zero-width characters — no visible placeholder.
+			expect((content as string).replace(/[\s\u200b]/gu, "")).toBe("");
+		});
 	});
 
 	// ----------------------------------------------------------------

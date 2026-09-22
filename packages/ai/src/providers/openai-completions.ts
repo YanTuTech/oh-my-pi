@@ -2218,8 +2218,14 @@ export function convertMessages(
 				content !== null &&
 				content !== undefined &&
 				(typeof content === "string" ? content.length > 0 : content.length > 0);
+			// Text-less tool-call turns replay `content: ""` — the official wire
+			// shape (OpenAI accepts it, and DeepSeek's own samples send it). Never
+			// synthesize a visible placeholder such as ".": it is replayed into the
+			// model's context on every later turn, and the model copies it back as
+			// real output (DeepSeek V4 does this verbatim). Providers that truly
+			// reject an empty string must opt into an invisible placeholder instead.
 			if (!hasContent && assistantMsg.tool_calls && compat.requiresAssistantContentForToolCalls) {
-				assistantMsg.content = ".";
+				assistantMsg.content = "\u200b";
 			}
 			if (!hasContent && !assistantMsg.tool_calls && !hasReasoningField) {
 				continue;
