@@ -10,16 +10,63 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { readBenchmarkSnapshot } from "./benchmarks";
+import { type BenchmarkEvidence, readBenchmarkSnapshot } from "./benchmarks";
+import { parseHarnessExecution } from "./harness-source";
 import { readJobResult } from "./runner";
 
 export type RunStatus = "running" | "complete" | "failed" | "cancelled";
 
 /** Benchmark implementation that produced a run. */
-export type BenchmarkKind = "harbor" | "edit" | "snapcompact";
+export type BenchmarkKind = "harbor" | "edit" | "snapcompact" | "mcp";
 
 /** How a run relates to its experiment's question. */
 export type RunRole = "baseline" | "variant" | "";
+
+/**
+ * The harness layer a variant targets. These are the tunable layers of the
+ * agent harness; naming them explicitly is what lets a run be *attributed* to a
+ * layer instead of being one undifferentiated "variant". A run with no harness
+ * record is assumed to differ from its baseline only in model or dataset.
+ */
+export type HarnessLayer =
+	| "prompt"
+	| "tool-description"
+	| "tool-implementation"
+	| "mcp"
+	| "skill"
+	| "agent-invocation"
+	| "tool-error"
+	| "step-length";
+
+/** Canonical ordering, for stable UI rendering and validation messages. */
+export const HARNESS_LAYERS: readonly HarnessLayer[] = [
+	"prompt",
+	"tool-description",
+	"tool-implementation",
+	"mcp",
+	"skill",
+	"agent-invocation",
+	"tool-error",
+	"step-length",
+];
+
+/**
+ * Structured attribution for a harness candidate: which layer it touches, which
+ * candidate it is, and (optionally) the digest of the patch that produced it.
+ * Without this a comparison cannot answer "which layer got better?".
+ */
+export interface HarnessVariant {
+	/** Layer(s) this arm changes. Validated against {@link HARNESS_LAYERS}. */
+	layers: HarnessLayer[];
+	/** Stable id for the candidate, e.g. `step-retry-v2`. */
+	variantId: string;
+	/**
+	 * Legacy caller-supplied label, not verified execution evidence. New runs
+	 * expose measured identities under RunRow.evidence.execution. A controlled
+	 * baseline/candidate comparison normally has different source digests.
+	 */
+	patchDigest?: string;
+}
 
 export interface RunRow {
 	benchmark: BenchmarkKind;
@@ -35,6 +82,10 @@ export interface RunRow {
 	role: RunRole;
 	/** One-line description of what this arm tests (e.g. "prewalk→flash at first edit/write"). */
 	note: string;
+	/** Structured harness-layer attribution; null when the arm is not a harness variant. */
+	harness: HarnessVariant | null;
+	/** Measured adapter provenance. Null for legacy or uninstrumented runs. */
+	evidence: BenchmarkEvidence | null;
 	/** Display-name override for the arm; "" falls back to the jobName-derived arm label. */
 	label: string;
 	status: RunStatus;
@@ -89,6 +140,8 @@ export interface LaunchRecord {
 	pid: number;
 	role?: RunRole;
 	note?: string;
+	/** Which harness layer(s) this arm varies; omitted for model/dataset-only arms. */
+	harness?: HarnessVariant;
 	config?: Record<string, unknown>;
 }
 
@@ -102,6 +155,8 @@ CREATE TABLE IF NOT EXISTS runs (
 	prewalk TEXT,
 	role TEXT NOT NULL DEFAULT '',
 	note TEXT NOT NULL DEFAULT '',
+	harness_json TEXT NOT NULL DEFAULT '',
+	evidence_json TEXT NOT NULL DEFAULT '',
 	label TEXT NOT NULL DEFAULT '',
 	config_json TEXT NOT NULL DEFAULT '{}',
 	status TEXT NOT NULL DEFAULT 'running',
@@ -196,6 +251,10 @@ export class RunStore {
 		);
 		if (!runColumns.has("role")) this.#db.run("ALTER TABLE runs ADD COLUMN role TEXT NOT NULL DEFAULT ''");
 		if (!runColumns.has("note")) this.#db.run("ALTER TABLE runs ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+		if (!runColumns.has("harness_json"))
+			this.#db.run("ALTER TABLE runs ADD COLUMN harness_json TEXT NOT NULL DEFAULT ''");
+		if (!runColumns.has("evidence_json"))
+			this.#db.run("ALTER TABLE runs ADD COLUMN evidence_json TEXT NOT NULL DEFAULT ''");
 		if (!runColumns.has("label")) this.#db.run("ALTER TABLE runs ADD COLUMN label TEXT NOT NULL DEFAULT ''");
 		if (!runColumns.has("benchmark")) {
 			this.#db.run("ALTER TABLE runs ADD COLUMN benchmark TEXT NOT NULL DEFAULT 'harbor'");
@@ -229,13 +288,14 @@ export class RunStore {
 		this.#db
 			.query(
 				`INSERT INTO runs
-				 (job_name, benchmark, dataset, agent, models, prewalk, role, note, config_json, status, pid, created_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)
+				 (job_name, benchmark, dataset, agent, models, prewalk, role, note, harness_json, config_json, status, pid, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)
 				 ON CONFLICT(job_name) DO UPDATE SET
 					benchmark = excluded.benchmark, pid = excluded.pid, status = 'running',
 					config_json = excluded.config_json,
 					role = CASE WHEN excluded.role != '' THEN excluded.role ELSE runs.role END,
-					note = CASE WHEN excluded.note != '' THEN excluded.note ELSE runs.note END`,
+					note = CASE WHEN excluded.note != '' THEN excluded.note ELSE runs.note END,
+					harness_json = CASE WHEN excluded.harness_json != '' THEN excluded.harness_json ELSE runs.harness_json END`,
 			)
 			.run(
 				launch.jobName,
@@ -246,6 +306,7 @@ export class RunStore {
 				launch.prewalk ? JSON.stringify(launch.prewalk) : null,
 				launch.role ?? "",
 				launch.note ?? "",
+				launch.harness ? JSON.stringify(launch.harness) : "",
 				JSON.stringify(launch.config ?? {}),
 				launch.pid,
 				Date.now(),
@@ -394,7 +455,7 @@ export class RunStore {
 			this.#db
 				.query(
 					`UPDATE runs SET n_total = ?, done = ?, pass = ?, fail = ?, error = ?, running = ?,
-					 cost_usd = ?, tok_in = ?, tok_out = ?, tok_cache = ?, score = ?, metrics_json = ?
+					 cost_usd = ?, tok_in = ?, tok_out = ?, tok_cache = ?, score = ?, metrics_json = ?, evidence_json = ?
 					 WHERE job_name = ?`,
 				)
 				.run(
@@ -410,6 +471,7 @@ export class RunStore {
 					snapshot.tokCache,
 					snapshot.score,
 					JSON.stringify(snapshot.metrics),
+					snapshot.evidence ? JSON.stringify(snapshot.evidence) : "",
 					jobName,
 				);
 			// Runs with no owning process (historical dirs, or a runner that died
@@ -502,6 +564,39 @@ export class RunStore {
 	}
 }
 
+/** Parse stored harness attribution; empty or malformed values read as null. */
+function parseHarness(raw: string): HarnessVariant | null {
+	if (raw.length === 0) return null;
+	try {
+		const parsed = JSON.parse(raw) as Partial<HarnessVariant>;
+		if (!Array.isArray(parsed.layers) || typeof parsed.variantId !== "string") return null;
+		const layers = parsed.layers.filter((layer): layer is HarnessLayer =>
+			HARNESS_LAYERS.includes(layer as HarnessLayer),
+		);
+		if (layers.length === 0) return null;
+		return {
+			layers,
+			variantId: parsed.variantId,
+			...(typeof parsed.patchDigest === "string" ? { patchDigest: parsed.patchDigest } : {}),
+		};
+	} catch {
+		return null;
+	}
+}
+
+function parseEvidence(raw: string): BenchmarkEvidence | null {
+	if (!raw) return null;
+	try {
+		const value = JSON.parse(raw) as BenchmarkEvidence;
+		if (value.mode === "deterministic")
+			return { mode: "deterministic", execution: null, evaluation: null, usageComplete: false };
+		if (value.mode !== "agent" || typeof value.usageComplete !== "boolean" || !value.evaluation) return null;
+		return { ...value, execution: parseHarnessExecution(value.execution) };
+	} catch {
+		return null;
+	}
+}
+
 function rowToRun(r: Record<string, unknown>): RunRow {
 	return {
 		benchmark: String(r.benchmark ?? "harbor") as BenchmarkKind,
@@ -513,6 +608,8 @@ function rowToRun(r: Record<string, unknown>): RunRow {
 		config: JSON.parse(String(r.config_json ?? "{}")),
 		role: String(r.role ?? "") as RunRole,
 		note: String(r.note ?? ""),
+		harness: parseHarness(String(r.harness_json ?? "")),
+		evidence: parseEvidence(String(r.evidence_json ?? "")),
 		label: String(r.label ?? ""),
 		status: String(r.status) as RunStatus,
 		pid: r.pid === null ? null : Number(r.pid),

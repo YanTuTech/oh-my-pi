@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import type { AgentMessage, SyntheticToolResultDetails } from "@oh-my-pi/pi-agent-core";
+import { Agent, type AgentMessage, type SyntheticToolResultDetails } from "@oh-my-pi/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage } from "@oh-my-pi/pi-ai";
 import * as AIError from "@oh-my-pi/pi-ai/error";
 import { kCursorExecResolved } from "@oh-my-pi/pi-ai/utils/block-symbols";
@@ -8,6 +8,7 @@ import type { Model, Usage } from "@oh-my-pi/pi-catalog/types";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
+import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import {
 	type RecoveryCompactionResult,
 	TurnRecovery,
@@ -116,6 +117,61 @@ describe("TurnRecovery replay-unsafe output classification", () => {
 	afterAll(() => {
 		authStorage.close();
 		tempDir.removeSync();
+	});
+
+	it("lets a newer prompt generation cancel a drop-only incomplete retry", async () => {
+		const userMessage = { role: "user" as const, content: "finish the task", timestamp: Date.now() - 1 };
+		const assistantMessage: AssistantMessage = {
+			role: "assistant",
+			content: [{ type: "thinking", thinking: "Long internal reasoning" }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			usage: { ...USAGE, output: 64_000, totalTokens: 64_000, reasoningTokens: 64_000 },
+			stopReason: "length",
+			timestamp: Date.now(),
+		};
+		const sessionManager = SessionManager.inMemory();
+		sessionManager.appendMessage(userMessage);
+		sessionManager.appendMessage(assistantMessage);
+		const agent = new Agent({
+			initialState: {
+				model,
+				systemPrompt: ["Test"],
+				tools: [],
+				messages: [userMessage, assistantMessage],
+			},
+		});
+		let generation = 0;
+		let continuations = 0;
+		const host = createHost(model, modelRegistry);
+		host.agent = agent;
+		host.sessionManager = sessionManager;
+		host.promptGeneration = () => generation;
+		host.scheduleAgentContinue = () => {
+			continuations++;
+		};
+		host.runAutoCompaction = async () => {
+			generation++;
+			return {
+				deferredHandoff: false,
+				continuationScheduled: false,
+				automaticContinuationBlocked: true,
+			};
+		};
+		const recovery = new TurnRecovery(host);
+
+		const result = await recovery.runRecoveryCompactionWithRollback("incomplete", assistantMessage, false, {
+			autoContinue: true,
+		});
+
+		expect(result.automaticContinuationBlocked).toBe(true);
+		expect(continuations).toBe(0);
+		expect(agent.state.messages.at(-1)).toMatchObject({ role: "assistant", stopReason: "length" });
+		expect(sessionManager.getBranch().at(-1)).toMatchObject({
+			type: "message",
+			message: expect.objectContaining({ role: "assistant", stopReason: "length" }),
+		});
 	});
 
 	it("rolls back a usage fallback cancelled during model reconciliation", async () => {

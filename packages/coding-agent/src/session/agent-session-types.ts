@@ -33,6 +33,8 @@ import type { ExtensionRunner } from "../extensibility/extensions";
 import type { ContextUsage } from "../extensibility/extensions/types";
 import type { Skill, SkillWarning } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
+import type { MCPExtensionCandidate } from "../mcp/capability-notice";
+import type { MCPToolOriginSource } from "../mcp/tool-bridge";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { XdevState } from "../tools/xdev";
@@ -185,6 +187,9 @@ export interface AgentSessionConfig {
 	builtInToolNames?: Iterable<string>;
 	/** MCP names whose initial registry entries came from the manager snapshot. */
 	mcpManagerToolNames?: Iterable<string>;
+	/** Original MCP routes before startup name arbitration. */
+	mcpManagerCandidates?: readonly MCPToolOriginSource[];
+	mcpExtensionCandidates?: readonly MCPExtensionCandidate[];
 	/** Updates tool-session predicates from the live active tool set. */
 	setActiveToolNames?: (names: Iterable<string>) => void;
 	/** Registers the write transport when runtime xdev mounts first need it. */

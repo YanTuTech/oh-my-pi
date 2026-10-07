@@ -12,7 +12,13 @@ import type { ExtensionRunner, SourceInfo, ToolInfo } from "../extensibility/ext
 import { ExtensionToolWrapper } from "../extensibility/extensions/wrapper";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "../extensibility/skills";
 import { type LocalProtocolOptions, XD_URL_PREFIX } from "../internal-urls";
-import { deduplicateMCPToolsByName } from "../mcp/tool-bridge";
+import {
+	copyMCPRouteIdentities,
+	MCPCapabilityNotice,
+	type MCPExtensionCandidate,
+	type MCPRouteIdentity,
+} from "../mcp/capability-notice";
+import { deduplicateMCPToolsByName, type MCPToolOriginSource } from "../mcp/tool-bridge";
 import { resolveMemoryBackend } from "../memory-backend/resolve";
 import { MEMORY_BACKEND_TOOL_NAMES } from "../memory-backend/tool-names";
 import type { MemoryBackendStartOptions } from "../memory-backend/types";
@@ -80,6 +86,9 @@ interface SessionToolsOptions {
 	presentationPinnedToolNames?: ReadonlySet<string>;
 	/** MCP tool names whose current registry entries came from the manager snapshot. */
 	mcpManagerToolNames?: Iterable<string>;
+	/** Original routes before startup arbitration; identities only are retained. */
+	mcpManagerCandidates?: readonly MCPToolOriginSource[];
+	mcpExtensionCandidates?: readonly MCPExtensionCandidate[];
 	ensureWriteRegistered?: () => Promise<boolean>;
 	/** Registers the hidden `goal` tool when goal mode is enabled at runtime. */
 	ensureGoalRegistered?: () => Promise<boolean>;
@@ -199,6 +208,9 @@ export class SessionTools {
 	#rpcHostToolNames = new Set<string>();
 	#mcpManagerToolNames = new Set<string>();
 	#extensionMcpTools = new Map<string, AgentTool>();
+	#mcpManagerCandidates: MCPRouteIdentity[] = [];
+	#mcpExtensionCandidates = new Map<string, MCPRouteIdentity[]>();
+	readonly #mcpCapabilityNotice = new MCPCapabilityNotice();
 	#xdev: XdevState | undefined;
 	#pendingXdevMountDelta: { added: Set<string>; removed: Set<string> } | undefined;
 	/**
@@ -289,6 +301,36 @@ export class SessionTools {
 		this.#skillsSettings = options.skillsSettings;
 		this.#skillsReloadable = options.skillsReloadable ?? true;
 		this.#promptModelKey = this.#currentPromptModelKey();
+		this.#mcpManagerCandidates = copyMCPRouteIdentities(
+			options.mcpManagerCandidates ??
+				[...this.#toolRegistry.values()].filter(tool => this.#mcpManagerToolNames.has(tool.name)),
+		);
+		for (const candidate of options.mcpExtensionCandidates ??
+			[...this.#extensionMcpTools.values()].map(tool => ({ owner: "<initial>", tool }))) {
+			this.recordExtensionMCPCandidate(candidate.owner, candidate.tool);
+		}
+		this.#updateMCPCapabilityNotice();
+	}
+
+	/** Called inside the registry mutation; a failed activation restores this identity snapshot. */
+	recordExtensionMCPCandidate(owner: string, tool: MCPToolOriginSource): void {
+		const key = JSON.stringify([owner, tool.name]);
+		const identities = copyMCPRouteIdentities([tool]);
+		if (identities.length === 0) this.#mcpExtensionCandidates.delete(key);
+		else this.#mcpExtensionCandidates.set(key, identities);
+	}
+
+	/** Current committed snapshot for the provider request; never enqueues an agent turn. */
+	getMCPCapabilityNotice(): CustomMessage | undefined {
+		return this.#host.isDisposed() ? undefined : this.#mcpCapabilityNotice.message;
+	}
+
+	#updateMCPCapabilityNotice(): void {
+		this.#mcpCapabilityNotice.update(
+			[...this.#mcpManagerCandidates, ...[...this.#mcpExtensionCandidates.values()].flat()],
+			this.#toolRegistry.values(),
+			new Set(this.getEnabledToolNames()),
+		);
 	}
 
 	/** Mutable registry shared with controller hosts that inspect available tools. */
@@ -488,7 +530,19 @@ export class SessionTools {
 		if (this.#toolRegistryMutationScope.getStore()) return untilAborted(signal, mutation);
 		const serialized = this.#toolRegistryMutationTail.then(() => {
 			signal?.throwIfAborted();
-			return this.#toolRegistryMutationScope.run(true, mutation);
+			return this.#toolRegistryMutationScope.run(true, async () => {
+				const managerBefore = this.#mcpManagerCandidates;
+				const extensionsBefore = new Map(this.#mcpExtensionCandidates);
+				try {
+					const result = await mutation();
+					if (!this.#host.isDisposed()) this.#updateMCPCapabilityNotice();
+					return result;
+				} catch (error) {
+					this.#mcpManagerCandidates = managerBefore;
+					this.#mcpExtensionCandidates = extensionsBefore;
+					throw error;
+				}
+			});
 		});
 		const operation = untilAborted(signal, serialized);
 		this.#toolRegistryMutationTail = serialized.then(
@@ -1723,6 +1777,7 @@ export class SessionTools {
 		try {
 			await this.#applyActiveToolsByName(nextActive);
 			if (this.#host.isDisposed()) restorePreviousMcpTools();
+			else this.#mcpManagerCandidates = copyMCPRouteIdentities(mcpTools);
 		} catch (error) {
 			restorePreviousMcpTools();
 			throw error;

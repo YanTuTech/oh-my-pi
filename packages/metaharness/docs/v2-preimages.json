@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "purpose": "Reversible v2 edit journal, not a standalone full repository archive. Replacements reconstruct the pre-v2 contents from this delivered working tree. No automatic restore is performed.",
+  "baseCommit": "24d101e42515e760b6cc52634c03f14364c35edc",
+  "preV2ArchiveSha256": "516b88c248e95b72b335d322010584cf93b1174611637b3c8d3ec2a545c79970",
+  "preV2ArchivePurpose": "pre-v2 dirty source snapshot; excludes generated runs",
+  "originalFiles": ["biome.json", "packages/metaharness/README.md", "packages/metaharness/adapters/mcp/agent-cases.ts", "packages/metaharness/adapters/mcp/agent-diagnostics.ts", "packages/metaharness/adapters/mcp/agent-fixture-server.ts", "packages/metaharness/adapters/mcp/agent-protocol.ts", "packages/metaharness/adapters/mcp/agent-runner.ts", "packages/metaharness/adapters/mcp/agent-scheduling.ts", "packages/metaharness/adapters/mcp/agent-system.md", "packages/metaharness/adapters/mcp/agent-worker.ts", "packages/metaharness/adapters/mcp/cli.ts", "packages/metaharness/adapters/mcp/disabled-legacy.ts", "packages/metaharness/adapters/mcp/fake-mcp-server.ts", "packages/metaharness/adapters/mcp/runner.ts", "packages/metaharness/adapters/mcp/tasks.ts", "packages/metaharness/adapters/mcp/tsconfig.json", "packages/metaharness/adapters/mcp/unavailable-policy.ts", "packages/metaharness/package.json", "packages/metaharness/scripts/run-go-v41-baseline.sh", "packages/metaharness/src/benchmarks.ts", "packages/metaharness/src/harness-source.ts", "packages/metaharness/src/launch-args.ts", "packages/metaharness/src/server.ts", "packages/metaharness/src/store.ts", "packages/metaharness/test/benchmarks.test.ts", "packages/metaharness/test/fixtures/manager-agent-host.ts", "packages/metaharness/test/harness-agent.test.ts", "packages/metaharness/test/manager.test.ts", "packages/metaharness/test/mcp-launch.test.ts"],
+  "files": [
+    {
+      "path": "packages/metaharness/adapters/mcp/agent-protocol.ts",
+      "replacements": [
+        {"current":"\tservers: { name: string; profile: \"primary\" | \"secondary\" | \"flaky\" | \"challenge-primary\" | \"challenge-secondary\"; seed?: number }[];","previous":"\tservers: { name: string; profile: \"primary\" | \"secondary\" | \"flaky\" }[];"},
+        {"current":"\t/** Tool lifecycle order assigned by the driver; absent only in pre-v2 archives. */\n\tstartedOrder?: number;\n\tcompletedOrder?: number | null;\n\t/** Logical model response that chose the call; same-response calls cannot depend on each other's results. */\n\tmodelRequestIndex?: number;\n","previous":""},
+        {"current":"\tif (!Array.isArray(value.servers) || value.servers.length > 8 || !value.servers.every(server => {\n\t\tif (!isRecord(server) || typeof server.name !== \"string\" || !/^[a-zA-Z0-9_.-]{1,64}$/.test(server.name) || Object.keys(server).some(key => ![\"name\", \"profile\", \"seed\"].includes(key))) return false;\n\t\tif ([\"challenge-primary\", \"challenge-secondary\"].includes(String(server.profile))) return Number.isSafeInteger(server.seed) && Number(server.seed) >= 1 && Number(server.seed) <= 65535;\n\t\treturn [\"primary\", \"secondary\", \"flaky\"].includes(String(server.profile)) && server.seed === undefined;\n\t}) || new Set(value.servers.map(server => server.name)).size !== value.servers.length) throw new Error(\"Invalid MCP servers\");","previous":"\tif (!Array.isArray(value.servers) || value.servers.length > 8 || !value.servers.every(server => isRecord(server) && typeof server.name === \"string\" && server.name.length > 0 && server.name.length <= 64 && /^[a-zA-Z0-9_.-]+$/.test(server.name) && [\"primary\", \"secondary\", \"flaky\"].includes(String(server.profile)))) throw new Error(\"Invalid MCP servers\");"},
+        {"current":"\tconst lifecycleOrders = new Set<number>();\n\tfor (const call of value.calls) {\n\t\tif (call.modelRequestIndex !== undefined && (!Number.isSafeInteger(call.modelRequestIndex) || call.modelRequestIndex < 1 || call.modelRequestIndex > Number(value.requests))) throw new Error(\"Invalid tool model-request identity\");\n\t\tif (call.startedOrder === undefined && call.completedOrder === undefined) continue; // Historical evidence.\n\t\tif (!Number.isSafeInteger(call.startedOrder) || call.startedOrder < 1 || lifecycleOrders.has(call.startedOrder)) throw new Error(\"Invalid tool lifecycle order\");\n\t\tlifecycleOrders.add(call.startedOrder);\n\t\tif (call.completedOrder !== null) {\n\t\t\tif (!Number.isSafeInteger(call.completedOrder) || call.completedOrder <= call.startedOrder || lifecycleOrders.has(call.completedOrder)) throw new Error(\"Invalid tool lifecycle order\");\n\t\t\tlifecycleOrders.add(call.completedOrder);\n\t\t}\n\t}\n","previous":""}
+      ]
+    },
+    {
+      "path":"packages/metaharness/adapters/mcp/agent-worker.ts",
+      "replacements":[
+        {"current":"\tlet toolLifecycleOrder = 0;\n","previous":""},
+        {"current":"\t\t\t\targs: server.profile.startsWith(\"challenge-\")\n\t\t\t\t\t? [path.join(import.meta.dir, \"challenge-fixture-server.js\"), server.profile, String(server.seed), server.name]\n\t\t\t\t\t: [path.join(import.meta.dir, \"agent-fixture-server.js\"), server.profile],","previous":"\t\t\t\targs: [path.join(import.meta.dir, \"agent-fixture-server.js\"), server.profile],"},
+        {"current":"isError: true, startedOrder: ++toolLifecycleOrder, completedOrder: null as number | null, modelRequestIndex: output.requests };","previous":"isError: true };"},
+        {"current":"} finally { call.completedOrder = ++toolLifecycleOrder; endTool(); }","previous":"} finally { endTool(); }"}
+      ]
+    },
+    {
+      "path":"packages/metaharness/src/harness-source.ts",
+      "replacements":[
+        {"current":"const driverFiles = [\"agent-worker.ts\", \"agent-protocol.ts\", \"agent-diagnostics.ts\", \"agent-system.md\", \"agent-fixture-server.ts\", \"challenge-fixture-server.ts\", \"challenge-data.ts\", \"disabled-legacy.ts\", \"unavailable-policy.ts\"];","previous":"const driverFiles = [\"agent-worker.ts\", \"agent-protocol.ts\", \"agent-diagnostics.ts\", \"agent-system.md\", \"agent-fixture-server.ts\", \"disabled-legacy.ts\", \"unavailable-policy.ts\"];"},
+        {"current":"entrypoints: [\"agent-worker.ts\", \"agent-fixture-server.ts\", \"challenge-fixture-server.ts\"].map(name => path.join(sourceDir, \"driver\", name)),","previous":"entrypoints: [path.join(sourceDir, \"driver/agent-worker.ts\"), path.join(sourceDir, \"driver/agent-fixture-server.ts\")],"}
+      ]
+    },
+    {
+      "path":"packages/metaharness/adapters/mcp/agent-runner.ts",
+      "replacements":[
+        {"current":"import { type AgentSuite, type BenchmarkGrade, type BenchmarkTask, gradeBenchmarkTask, isChallengeTask, parseAgentSuite, suiteSourceDigests, toBenchmarkInput, validateSuiteTasks } from \"./agent-suites\";\nimport type { ChallengeGrade } from \"./challenge-cases\";","previous":"import { type AgentTask, type TaskGrade, gradeAgentTask, toAgentInput } from \"./agent-cases\";"},
+        {"current":"\tsource: HarnessSourceRequest;\n\tsuite?: AgentSuite;\n","previous":"\tsource: HarnessSourceRequest;\n"},
+        {"current":"\tgrade: BenchmarkGrade | null;","previous":"\tgrade: TaskGrade | null;"},
+        {"current":"\t\t/** Absent in historical v1 runs; new runs always bind an explicit suite and fixture digest. */\n\t\tsuite?: AgentSuite;\n\t\tfixtureDigest?: string;\n","previous":""},
+        {"current":"\t\toutcomes?: Record<ChallengeGrade[\"outcome\"], number>;\n","previous":""},
+        {"current":"\tif (result.evaluation.suite === \"mcp-challenge-v2\") {\n\t\tsummary.outcomes = { completed: 0, \"honest-unavailable\": 0, \"wrong-source\": 0, \"unsupported-answer\": 0, \"incorrect-result\": 0, \"execution-error\": 0 };\n\t\tfor (const run of runs) {\n\t\t\tconst outcome = run.error ? \"execution-error\" : run.grade && \"outcome\" in run.grade ? run.grade.outcome : \"execution-error\";\n\t\t\tsummary.outcomes[outcome] += 1;\n\t\t}\n\t}\n","previous":""},
+        {"current":"export async function runAgentBenchmark(tasks: BenchmarkTask[], config: AgentRunConfig, outputPath: string): Promise<AgentBenchmarkResult> {\n\ttasks = structuredClone(tasks);\n\tconst suite = parseAgentSuite(config.suite ?? (tasks.some(isChallengeTask) ? \"mcp-challenge-v2\" : \"mcp-smoke-v1\"));\n\tvalidateSuiteTasks(tasks, suite);","previous":"export async function runAgentBenchmark(tasks: AgentTask[], config: AgentRunConfig, outputPath: string): Promise<AgentBenchmarkResult> {"},
+        {"current":"toBenchmarkInput(task, config)","previous":"toAgentInput(task, config)"},
+        {"current":"\tconst suiteIdentity = await suiteSourceDigests(suite);","previous":"\tconst evaluatorFiles = [\"agent-cases.ts\", \"agent-runner.ts\", \"agent-protocol.ts\", \"agent-scheduling.ts\"];\n\tconst evaluatorBytes = await Promise.all(evaluatorFiles.map(async name => [name, sha256(await Bun.file(path.join(import.meta.dir, name)).bytes())]));"},
+        {"current":"evaluation: { suite, ...suiteIdentity, model: config.model, tasksetDigest: sha256(JSON.stringify(tasks)),","previous":"evaluation: { model: config.model, tasksetDigest: sha256(JSON.stringify(tasks)), evaluatorDigest: sha256(JSON.stringify(evaluatorBytes)),"},
+        {"current":"toBenchmarkInput(task, controls)","previous":"toAgentInput(task, controls)"},
+        {"current":"run.grade = gradeBenchmarkTask(task, output);","previous":"run.grade = gradeAgentTask(task, output);"}
+      ]
+    },
+    {
+      "path":"packages/metaharness/adapters/mcp/cli.ts",
+      "replacements":[
+        {"current":"import { parseAgentSuite, tasksForSuite } from \"./agent-suites\";","previous":"import { AGENT_TASKS } from \"./agent-cases\";"},
+        {"current":"\n  --suite <id>                 mcp-smoke-v1 (default) or mcp-challenge-v2","previous":""},
+        {"current":"\t\t\tsuite: { type: \"string\" },\n","previous":""},
+        {"current":"\tif (values.suite !== undefined && mode !== \"agent\") fail(\"Versioned agent suites require agent mode\");\n\tconst suite = parseAgentSuite(values.suite);\n\tconst suiteTasks = tasksForSuite(suite);\n","previous":""},
+        {"current":"suiteTasks.map(task => ({ id: task.id, name: task.id }))","previous":"AGENT_TASKS.map(task => ({ id: task.id, name: task.id }))"},
+        {"current":"let tasks = wanted ? suiteTasks.filter(task => wanted.has(task.id)) : suiteTasks;","previous":"let tasks = wanted ? AGENT_TASKS.filter(task => wanted.has(task.id)) : AGENT_TASKS;"},
+        {"current":"\t\t\tconst result = await runAgentBenchmark(tasks, {\n\t\t\t\tsuite,\n","previous":"\t\t\tconst result = await runAgentBenchmark(tasks, {\n"},
+        {"current":"${run.success ? \"PASS\" : run.error ?? (run.grade && \"outcome\" in run.grade ? run.grade.outcome : \"FAIL\")};","previous":"${run.success ? \"PASS\" : run.error ?? \"FAIL\"};"}
+      ]
+    },
+    {
+      "path":"packages/metaharness/src/launch-args.ts",
+      "replacements":[
+        {"current":"import { type AgentSuite, parseAgentSuite } from \"../adapters/mcp/agent-suites\";\n","previous":""},
+        {"current":"\tsuite?: AgentSuite;\n","previous":""},
+        {"current":"\tif (request.dataset === \"mcp-challenge-v2\" && options.suite === undefined) throw new Error(\"v2 dataset requires explicit mcp.suite\");\n\tif (options.suite !== undefined) {\n\t\tif (mode !== \"agent\") throw new Error(\"Versioned suites require MCP agent mode\");\n\t\tconst suite = parseAgentSuite(options.suite);\n\t\tif (request.dataset !== undefined && request.dataset !== suite && !(suite === \"mcp-smoke-v1\" && request.dataset === \"mcp-agent-v1\")) throw new Error(\"Dataset conflicts with MCP suite\");\n\t\targs.push(\"--suite\", suite);\n\t}\n","previous":""}
+      ]
+    },
+    {"path":"packages/metaharness/src/server.ts","replacements":[{"current":"? \"mcp-tools\" : request.mcp?.suite ?? \"mcp-agent-v1\")","previous":"? \"mcp-tools\" : \"mcp-agent-v1\")"}]}
+  ]
+}

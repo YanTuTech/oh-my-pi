@@ -164,6 +164,39 @@ describe("RunStore", () => {
 		expect(treat?.note).toBe("prewalk flash v2");
 	});
 
+	it("round-trips harness layer attribution so an arm is attributable to a layer", () => {
+		const jobsDir = makeJobsDir();
+		const store = new RunStore(jobsDir);
+		store.registerLaunch({
+			benchmark: "edit",
+			jobName: "hx-attrib",
+			dataset: "typescript-edit",
+			agent: "edit",
+			models: ["m/model"],
+			pid: process.pid,
+			role: "variant",
+			harness: { layers: ["prompt", "step-length"], variantId: "retry-v2", patchDigest: "deadbeef" },
+		});
+		store.markExit("hx-attrib", 0);
+		expect(store.getRun("hx-attrib")?.harness).toEqual({
+			layers: ["prompt", "step-length"],
+			variantId: "retry-v2",
+			patchDigest: "deadbeef",
+		});
+
+		// A plain arm carries no attribution rather than a default one.
+		store.registerLaunch({
+			benchmark: "edit",
+			jobName: "hx-plain",
+			dataset: "typescript-edit",
+			agent: "edit",
+			models: ["m/model"],
+			pid: process.pid,
+		});
+		store.markExit("hx-plain", 0);
+		expect(store.getRun("hx-plain")?.harness).toBeNull();
+	});
+
 	it("releases a dead runner's pid without failing a possibly-live orphan", () => {
 		const jobsDir = makeJobsDir();
 		writeFixtureJob(jobsDir, "job-b");
@@ -247,15 +280,62 @@ describe("ManagerServer API", () => {
 		expect(deleteUnknown.status).toBe(404);
 	});
 
-	it("serves edit and SnapCompact metrics and native traces through one API", async () => {
+	it("exposes harness layer attribution on both the run list and detail", async () => {
 		const jobsDir = makeJobsDir();
 		const manager = new ManagerServer(jobsDir);
-		for (const benchmark of ["edit", "snapcompact"] as const) {
+		manager.store.registerLaunch({
+			benchmark: "edit",
+			jobName: "attr-variant",
+			dataset: "typescript-edit",
+			agent: "edit",
+			models: ["m/x"],
+			pid: process.pid,
+			role: "variant",
+			harness: { layers: ["prompt", "step-length"], variantId: "retry-v2", patchDigest: "a1b2c3" },
+		});
+		manager.store.registerLaunch({
+			benchmark: "edit",
+			jobName: "attr-baseline",
+			dataset: "typescript-edit",
+			agent: "edit",
+			models: ["m/x"],
+			pid: process.pid,
+			role: "baseline",
+		});
+		manager.store.markExit("attr-variant", 0);
+		manager.store.markExit("attr-baseline", 0);
+		const server = manager.start(0);
+		cleanups.push(() => {
+			void manager.stop();
+		});
+		const base = `http://localhost:${server.port}`;
+
+		const rows = (await (await fetch(`${base}/api/runs`)).json()) as Array<{
+			jobName: string;
+			harness: { layers: string[]; variantId: string; patchDigest?: string } | null;
+		}>;
+		expect(rows.find(row => row.jobName === "attr-variant")?.harness).toEqual({
+			layers: ["prompt", "step-length"],
+			variantId: "retry-v2",
+			patchDigest: "a1b2c3",
+		});
+		expect(rows.find(row => row.jobName === "attr-baseline")?.harness).toBeNull();
+
+		const detail = (await (await fetch(`${base}/api/runs/attr-variant`)).json()) as {
+			run: { harness: { layers: string[]; variantId: string } | null };
+		};
+		expect(detail.run.harness?.layers).toEqual(["prompt", "step-length"]);
+	});
+
+	it("serves edit, SnapCompact, and MCP metrics and native traces through one API", async () => {
+		const jobsDir = makeJobsDir();
+		const manager = new ManagerServer(jobsDir);
+		for (const benchmark of ["edit", "snapcompact", "mcp"] as const) {
 			const jobName = `${benchmark}-arm`;
 			manager.store.registerLaunch({
 				benchmark,
 				jobName,
-				dataset: benchmark === "edit" ? "typescript-edit" : "squad-dev",
+				dataset: benchmark === "edit" ? "typescript-edit" : benchmark === "mcp" ? "mcp-tools" : "squad-dev",
 				agent: benchmark,
 				models: ["test/model"],
 				pid: process.pid,
@@ -295,6 +375,41 @@ describe("ManagerServer API", () => {
 				rows: [{ n: 1, f1: 0.5, em: 0, cost_usd: 0.1, tokens_in: 10, tokens_out: 2, cache_w: 0, cache_r: 0 }],
 			}),
 		);
+		const mcpDir = path.join(jobsDir, "mcp-arm");
+		fs.writeFileSync(
+			path.join(mcpDir, "result.json"),
+			JSON.stringify({
+				tasks: [
+					{
+						id: "search-basic",
+						name: "Search the paper index",
+						runs: [
+							{
+								runIndex: 0,
+								success: true,
+								duration: 10,
+								tokens: { input: 0, output: 0, reasoning: 0 },
+								toolCalls: { "paper-search-alpha::search_papers": { calls: 1, successes: 1, failures: 0 } },
+								expected: { called: ["search_papers"], forbiddenCalled: [] },
+								collisionErrors: 0,
+							},
+						],
+					},
+				],
+				summary: {
+					totalRuns: 1,
+					successfulRuns: 1,
+					taskSuccessRate: 1,
+					toolSuccessRate: 1,
+					selectionPrecision: 1,
+					relevanceF1: 1,
+					callsPerTask: 1,
+					collisionErrors: 0,
+					toolNameCompliance: 1,
+					totalTokens: { input: 0, output: 0 },
+				},
+			}),
+		);
 		manager.store.syncAll();
 		const server = manager.start(0);
 		cleanups.push(() => {
@@ -321,6 +436,22 @@ describe("ManagerServer API", () => {
 			await fetch(`${base}/api/runs/snapcompact-arm/traces/${encodeURIComponent(snap.traces[0].name)}`)
 		).json()) as { entries: Array<{ kind: string }> };
 		expect(snapTrace.entries.map(entry => entry.kind)).toEqual(["question", "answer", "reference"]);
+
+		const mcp = (await (await fetch(`${base}/api/runs/mcp-arm`)).json()) as {
+			run: { benchmark: string; metrics: Record<string, number> };
+		};
+		expect(mcp.run).toMatchObject({
+			benchmark: "mcp",
+			metrics: {
+				task_success_rate: 1,
+				tool_success_rate: 1,
+				selection_precision: 1,
+				relevance_f1: 1,
+				calls_per_task: 1,
+				collision_errors: 0,
+				tool_name_compliance: 1,
+			},
+		});
 	});
 	it("guards resume: unknown, non-harbor, running, and config-less runs are rejected", async () => {
 		const jobsDir = makeJobsDir();

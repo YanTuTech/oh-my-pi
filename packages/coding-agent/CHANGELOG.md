@@ -27,6 +27,8 @@
 
 ### Fixed
 
+- Recovered once from reasoning-only output-limit stops when compaction cannot make progress, without replaying visible output or tool calls.
+- Made MCP name-collision losses visible to the agent as a bounded current-state notice without interrupting tasks, changing tool names, or triggering extra turns.
 - Fixed the welcome screen staying at its original width after a terminal resize; a settled rebuild now recomposes it at the new width like the rest of the transcript.
 - Fixed `omp if-bench` ending an Anthropic model's run on a transient `Refusal (cyber)` classification; the cyber classifier is stochastic near the threshold, so a refused turn is now retried with a fresh session (up to 3 attempts) before it is scored as a run-ending provider failure.
 - Fixed streamed assistant responses crashing when a later provider delta revised earlier Markdown; assistant output now stays mutable until finalization.

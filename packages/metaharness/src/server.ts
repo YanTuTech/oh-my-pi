@@ -26,7 +26,7 @@ import * as path from "node:path";
 import type { Server, Subprocess } from "bun";
 import { BENCHMARK_DEFINITIONS } from "./benchmarks";
 import { buildExperiments, experimentDetail, experimentOf } from "./experiments";
-import { harborRunnerArgs, type LaunchRequest } from "./launch-args";
+import { harborRunnerArgs, type LaunchRequest, mcpRunnerArgs } from "./launch-args";
 import { type LaunchRecord, type RunRole, type RunRow, RunStore } from "./store";
 
 /** PUT /api/experiments/:id body — goal and per-run role/note/label metadata. */
@@ -58,6 +58,9 @@ export interface AddArmRequest {
 	include?: string[];
 	role?: RunRole;
 	note?: string;
+	harness?: LaunchRequest["harness"];
+	harnessSource?: LaunchRequest["harnessSource"];
+	mcp?: LaunchRequest["mcp"];
 	extraArgs?: string[];
 }
 
@@ -161,6 +164,11 @@ export function resolveArmLaunch(store: RunStore, experimentId: string, req: Add
 	const jobName = `${experimentId}-${req.arm}`;
 	if (store.getRun(jobName)) throw new Error(`arm '${req.arm}' already exists in '${experimentId}'`);
 	const conditions = strings(cfg.conditions);
+	// A treatment must name its own executable source. Inheriting a sibling's
+	// root would silently evaluate the baseline again under a new variant label.
+	if (template.benchmark === "mcp" && (req.mcp?.mode ?? cfg.mcp?.mode ?? "agent") === "agent" && !req.harnessSource) {
+		throw new Error("A new MCP agent arm requires its own explicit harnessSource");
+	}
 	return {
 		benchmark: template.benchmark,
 		model: req.model,
@@ -178,6 +186,9 @@ export function resolveArmLaunch(store: RunStore, experimentId: string, req: Add
 		prewalk: req.prewalk,
 		role: req.role,
 		note: req.note,
+		harness: req.harness,
+		harnessSource: req.harnessSource,
+		mcp: template.benchmark === "mcp" ? { ...cfg.mcp, ...req.mcp } : undefined,
 		environment: cfg.environment === "docker" || cfg.environment === "apple-container" ? cfg.environment : undefined,
 		extraArgs: req.extraArgs,
 	};
@@ -371,20 +382,32 @@ export class ManagerServer {
 	launch(request: LaunchRequest): { jobName: string; pid: number } {
 		if (!request.model) throw new Error("model is required");
 		const benchmark = request.benchmark ?? "harbor";
-		if (benchmark !== "harbor" && benchmark !== "edit" && benchmark !== "snapcompact") {
+		if (benchmark !== "harbor" && benchmark !== "edit" && benchmark !== "snapcompact" && benchmark !== "mcp") {
 			throw new Error(`unsupported benchmark: ${benchmark}`);
 		}
+		if (request.harnessSource && benchmark !== "mcp")
+			throw new Error("Harness source execution binding currently supports only MCP agent runs");
 		const dataset =
 			request.dataset ??
-			(benchmark === "harbor" ? "terminal-bench@2.0" : benchmark === "edit" ? "typescript-edit" : "squad-dev");
+			(benchmark === "harbor"
+				? "terminal-bench@2.0"
+				: benchmark === "edit"
+					? "typescript-edit"
+					: benchmark === "mcp"
+						? request.mcp?.mode === "deterministic" || request.mcp?.policy
+							? "mcp-tools"
+							: (request.mcp?.suite ?? "mcp-agent-v1")
+						: "squad-dev");
 		const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 		const modelSlug = request.model.replace(/[^a-zA-Z0-9]+/g, "-");
 		const jobName = request.jobName ?? `${modelSlug}-${stamp}`;
+		assertSafeJobName(jobName);
 		if (this.#children.has(jobName) || this.#store.getRun(jobName)?.status === "running") {
 			throw new Error(`run ${jobName} is already running`);
 		}
 		const jobDir = path.join(this.jobsDir, jobName);
-		fs.mkdirSync(jobDir, { recursive: true });
+		if (benchmark === "mcp" && fs.existsSync(path.join(jobDir, "result.json")))
+			throw new Error("MCP run already has evidence; use a fresh job name");
 
 		let argv: string[];
 		let cwd: string;
@@ -395,6 +418,9 @@ export class ManagerServer {
 			if (request.include?.length) argv.push("--tasks", request.include.join(","));
 			if (request.concurrency !== undefined) argv.push("--task-concurrency", String(request.concurrency));
 			if (request.attempts !== undefined) argv.push("--runs", String(request.attempts));
+		} else if (benchmark === "mcp") {
+			cwd = PKG_DIR;
+			argv = ["bun", "adapters/mcp/cli.ts", ...mcpRunnerArgs(request, jobDir)];
 		} else if (benchmark === "snapcompact") {
 			cwd = PKG_DIR;
 			argv = ["uv", "run", "src/adapters/snapcompact.py", "--model", request.model, "--output-dir", jobDir];
@@ -405,7 +431,8 @@ export class ManagerServer {
 			cwd = PKG_DIR;
 			argv = ["bun", "src/runner.ts", ...harborRunnerArgs(request, { jobsDir: this.jobsDir, jobName, dataset })];
 		}
-		if (benchmark !== "harbor") argv.push(...(request.extraArgs ?? []));
+		if (benchmark !== "harbor" && benchmark !== "mcp") argv.push(...(request.extraArgs ?? []));
+		fs.mkdirSync(jobDir, { recursive: true });
 
 		const pid = this.#spawnRunner(argv, cwd, {
 			benchmark,
@@ -417,6 +444,7 @@ export class ManagerServer {
 			config: { ...request },
 			role: request.role,
 			note: request.note,
+			harness: request.harness,
 		});
 		if (request.goal) this.#store.setExperimentGoal(experimentOf(jobName), request.goal);
 		return { jobName, pid };

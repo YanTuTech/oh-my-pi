@@ -1,6 +1,8 @@
 /** Benchmark adapters normalize native artifacts into manager runs and traces. */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { AgentBenchmarkResult } from "../adapters/mcp/agent-runner";
+import { type HarnessExecution, parseHarnessExecution } from "./harness-source";
 import { aggregate, readJobResult, readTrials } from "./runner";
 import type { BenchmarkKind } from "./store";
 
@@ -42,6 +44,25 @@ export const BENCHMARK_DEFINITIONS: BenchmarkDefinition[] = [
 			{ key: "exact_match", label: "Exact match", format: "percent", higherIsBetter: true },
 		],
 	},
+	{
+		kind: "mcp",
+		label: "MCP tool use",
+		metrics: [
+			{ key: "task_success_rate", label: "Task success", format: "percent", higherIsBetter: true },
+			{ key: "tool_success_rate", label: "Tool success", format: "percent", higherIsBetter: true },
+			{ key: "selection_precision", label: "Tool selection P", format: "percent", higherIsBetter: true },
+			{ key: "relevance_f1", label: "Relevance detection", format: "percent", higherIsBetter: true },
+			{ key: "calls_per_task", label: "Calls per task", format: "number", higherIsBetter: false },
+			{ key: "collision_errors", label: "Names dropped by collision", format: "number", higherIsBetter: false },
+			{ key: "tool_name_compliance", label: "Wire-name compliance", format: "percent", higherIsBetter: true },
+			{ key: "trial_coverage", label: "Trials attempted", format: "percent", higherIsBetter: true },
+			{ key: "execution_errors", label: "Execution errors", format: "number", higherIsBetter: false },
+			{ key: "timeout_runs", label: "Timeout trials", format: "number", higherIsBetter: false },
+			{ key: "unexecuted_runs", label: "Unexecuted trials", format: "number", higherIsBetter: false },
+			{ key: "unknown_usage_runs", label: "Unmetered trials", format: "number", higherIsBetter: false },
+			{ key: "budget_accounted_usd", label: "Estimate + reserves", format: "usd", higherIsBetter: false },
+		],
+	},
 ];
 
 /** A normalized trace emitted by any benchmark adapter. */
@@ -56,8 +77,18 @@ export interface BenchmarkTrace {
 	tracePath: string | null;
 }
 
+export interface BenchmarkEvidence {
+	mode: "agent" | "deterministic";
+	execution: HarnessExecution | null;
+	evaluation: AgentBenchmarkResult["evaluation"] | null;
+	suiteStatus?: string | null;
+	stopReason?: string | null;
+	usageComplete: boolean;
+}
+
 /** Uniform aggregate and traces read from benchmark-native artifacts. */
 export interface BenchmarkSnapshot {
+	evidence?: BenchmarkEvidence;
 	traces: BenchmarkTrace[];
 	total: number;
 	done: number;
@@ -239,10 +270,167 @@ function readSnapcompactSnapshot(jobDir: string): BenchmarkSnapshot {
 	};
 }
 
+/**
+ * Generic per-tool call statistics. The edit adapter hard-codes `{read, edit,
+ * write}`; MCP and skill runs need arbitrary tool identities, so the reader
+ * accepts any tool-name key.
+ */
+export interface ToolCallStat {
+	calls: number;
+	successes: number;
+	failures: number;
+}
+
+interface McpRun {
+	costUsd?: number;
+	usageComplete?: boolean;
+	grade?: unknown;
+	output?: unknown;
+	runIndex: number;
+	success: boolean;
+	error?: string;
+	duration: number;
+	tokens: { input: number; output: number; reasoning: number };
+	toolCalls?: Record<string, ToolCallStat>;
+	/** Tools the task expected to be called, and tools it explicitly forbade. */
+	expected?: { called?: string[]; forbiddenCalled?: string[] };
+	/** Tools dropped by name-collision arbitration during this run. */
+	collisionErrors?: number;
+	/** Fraction of minted wire names that satisfy the strictest provider validator. */
+	toolNameCompliance?: number;
+}
+
+interface McpTask {
+	id: string;
+	name: string;
+	runs: McpRun[];
+}
+
+interface McpResult {
+	version?: number;
+	mode?: "agent" | "deterministic";
+	execution?: unknown;
+	evaluation?: AgentBenchmarkResult["evaluation"];
+	status?: string;
+	stopReason?: string | null;
+	tasks: McpTask[];
+	summary: {
+		totalRuns: number;
+		successfulRuns: number;
+		taskSuccessRate: number;
+		toolSuccessRate: number;
+		selectionPrecision: number | null;
+		relevanceF1: number | null;
+		costUsd?: number;
+		usageComplete?: boolean;
+		unknownUsageRuns?: number;
+		timeoutRuns?: number;
+		budgetAccountedUsd?: number;
+		callsPerTask: number;
+		collisionErrors: number;
+		toolNameCompliance: number;
+		totalTokens: { input: number; output: number };
+	};
+}
+
+function readMcpSnapshot(jobDir: string): BenchmarkSnapshot {
+	const file = path.join(jobDir, "result.json");
+	if (!fs.existsSync(file)) return emptySnapshot();
+	const result: McpResult = JSON.parse(fs.readFileSync(file, "utf8"));
+	if (result.mode !== undefined && result.mode !== "agent" && result.mode !== "deterministic")
+		throw new Error("Unknown MCP evaluation mode");
+	const realAgent = result.mode === "agent";
+	const execution = realAgent ? parseHarnessExecution(result.execution) : null;
+	if (
+		realAgent &&
+		(result.version !== 1 ||
+			!result.evaluation ||
+			![result.evaluation.tasksetDigest, result.evaluation.evaluatorDigest, result.evaluation.controlsDigest].every(
+				digest => /^[a-f0-9]{64}$/.test(digest),
+			) ||
+			typeof result.summary.usageComplete !== "boolean" ||
+			typeof result.summary.costUsd !== "number" ||
+			!Number.isFinite(result.summary.costUsd))
+	)
+		throw new Error("Incomplete agent evaluation provenance");
+	const traces: BenchmarkTrace[] = [];
+	let tokIn = 0;
+	let tokOut = 0;
+	for (const task of result.tasks) {
+		for (const run of task.runs) {
+			tokIn += run.tokens.input;
+			tokOut += run.tokens.output;
+			const runNumber = run.runIndex + 1;
+			traces.push({
+				name: `${task.id}__${runNumber}`,
+				task: task.id,
+				status: run.success ? "pass" : run.error ? "error" : "fail",
+				reward: run.success ? 1 : 0,
+				costUsd: realAgent ? (run.costUsd ?? 0) : 0,
+				durationMs: run.duration,
+				detail: JSON.stringify({
+					name: task.name,
+					error: run.error ?? null,
+					tools: run.toolCalls ?? null,
+					...(realAgent
+						? { mode: "agent", grade: run.grade, output: run.output, usageComplete: run.usageComplete }
+						: {}),
+					expected: run.expected ?? null,
+					collisionErrors: run.collisionErrors ?? 0,
+				}),
+				tracePath: path.join("result.dump", task.id.replace(/[^a-zA-Z0-9._-]/g, "_"), `run-${runNumber}.md`),
+			});
+		}
+	}
+	const pass = traces.filter(trace => trace.status === "pass").length;
+	const error = traces.filter(trace => trace.status === "error").length;
+	return {
+		evidence: {
+			mode: realAgent ? "agent" : "deterministic",
+			execution,
+			evaluation: realAgent ? (result.evaluation ?? null) : null,
+			usageComplete: realAgent && result.summary.usageComplete === true,
+			...(realAgent ? { suiteStatus: result.status ?? null, stopReason: result.stopReason ?? null } : {}),
+		},
+		traces,
+		total: result.summary.totalRuns,
+		done: traces.length,
+		pass,
+		fail: traces.length - pass,
+		error,
+		running: realAgent && result.status !== "running" ? 0 : Math.max(0, result.summary.totalRuns - traces.length),
+		costUsd: realAgent ? (result.summary.costUsd ?? 0) : 0,
+		tokIn,
+		tokOut,
+		tokCache: realAgent ? Number((result.summary.totalTokens as Record<string, number>).cacheRead ?? 0) : 0,
+		score: result.summary.taskSuccessRate,
+		metrics: {
+			task_success_rate: result.summary.taskSuccessRate,
+			tool_success_rate: result.summary.toolSuccessRate,
+			selection_precision: result.summary.selectionPrecision,
+			relevance_f1: result.summary.relevanceF1,
+			calls_per_task: result.summary.callsPerTask,
+			collision_errors: result.summary.collisionErrors,
+			tool_name_compliance: result.summary.toolNameCompliance,
+			...(realAgent
+				? {
+						trial_coverage: result.summary.totalRuns > 0 ? traces.length / result.summary.totalRuns : null,
+						execution_errors: error,
+						unexecuted_runs: Math.max(0, result.summary.totalRuns - traces.length),
+						timeout_runs: result.summary.timeoutRuns ?? null,
+						unknown_usage_runs: result.summary.unknownUsageRuns ?? null,
+						budget_accounted_usd: result.summary.budgetAccountedUsd ?? null,
+					}
+				: {}),
+		},
+	};
+}
+
 /** Read and normalize the latest artifacts for a benchmark run. */
 export function readBenchmarkSnapshot(benchmark: BenchmarkKind, jobDir: string): BenchmarkSnapshot {
 	if (benchmark === "edit") return readEditSnapshot(jobDir);
 	if (benchmark === "snapcompact") return readSnapcompactSnapshot(jobDir);
+	if (benchmark === "mcp") return readMcpSnapshot(jobDir);
 	const trials = readTrials(jobDir);
 	const job = readJobResult(jobDir);
 	const totals = aggregate(trials, job, job?.nTotal ?? trials.length);

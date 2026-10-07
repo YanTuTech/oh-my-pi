@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "baseline": "runs/opencode-go-v41-20260922/challenge-v2-36-20260922-103722-kDyBEYqn/result.json",
+  "baselineSha256": "02d8e35befc3dc22f8c9302a5e8eb448eca0581e626e9e0157d5197ee40ce750",
+  "baselineSourceDigest": "c048c232645ac63f87f8dbeeac19aeddb1f81b718c6c40d9fe74a0b6146d651b",
+  "candidateSourceDigest": "e920a7851bb4b0cf7fcfffe180613e93caeca3d4b3a1ea32dc5ff875f111bc87",
+  "expectedBaseCommit": "24d101e42515e760b6cc52634c03f14364c35edc",
+  "driverDigest": "13ea2d7a53529bdb69118cd844f3b5e37b5c05658442bf5aaba9323149dce7f0",
+  "modelProfile": "runs/opencode-go-v41-20260922/model-profile.json",
+  "productionFiles": [
+    {"path":"packages/coding-agent/src/sdk.ts","sha256":"f70d81e249fb1f955932c5bcae119ffbbc9328b1b3e94e107ef1349eb204913c"},
+    {"path":"packages/coding-agent/src/session/session-tools.ts","sha256":"071eaedd5dbe6167733d531c9703ecb9d966741aef23608b6ac471cd73b0609e"},
+    {"path":"packages/coding-agent/src/session/agent-session.ts","sha256":"10b34ffde73d15a9c0fd5401af76c3a416e6a66334bc9f22ad9c77c29e68d738"},
+    {"path":"packages/coding-agent/src/session/agent-session-types.ts","sha256":"db609395c27130f5df24e5f98c5afceb78799736353e87c804d3fe9d60487fb7"},
+    {"path":"packages/coding-agent/src/mcp/capability-notice.ts","sha256":"f5ecfdbbb03bcb9af691dd134e8498937c84b2d948d013b0e8e25a5b647506e3"},
+    {"path":"packages/coding-agent/src/prompts/system/mcp-capability-state.md","sha256":"b23433b35e995551bf0e8dacc8cc910153e71316281c861f3c1b5aa1917b945a"},
+    {"path":"packages/coding-agent/CHANGELOG.md","sha256":"091fa77701626c7e33cd64d22b4263fcfbe93a1b8ee383d4995549235786c56e"}
+  ]
+}

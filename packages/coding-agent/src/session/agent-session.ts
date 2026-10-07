@@ -1348,6 +1348,8 @@ export class AgentSession {
 			createInspectImageTool: config.createInspectImageTool,
 			builtInToolNames: config.builtInToolNames,
 			mcpManagerToolNames: config.mcpManagerToolNames,
+			mcpManagerCandidates: config.mcpManagerCandidates,
+			mcpExtensionCandidates: config.mcpExtensionCandidates,
 			presentationPinnedToolNames: config.presentationPinnedToolNames,
 			ensureWriteRegistered: config.ensureWriteRegistered,
 			ensureGoalRegistered: config.ensureGoalRegistered,
@@ -4838,6 +4840,16 @@ export class AgentSession {
 	}
 
 	/** Replaces connected MCP tools and enables them immediately. */
+	/** Preserve losing extension identities as part of the serialized registration transaction. */
+	recordExtensionMCPCandidate(owner: string, tool: AgentTool): void {
+		this.#tools.recordExtensionMCPCandidate(owner, tool);
+	}
+
+	/** Provider-only capability snapshot; does not append a user message or schedule a turn. */
+	getMCPCapabilityNotice(): CustomMessage | undefined {
+		return this.#tools.getMCPCapabilityNotice();
+	}
+
 	refreshMCPTools(mcpTools: CustomTool[]): Promise<void> {
 		return this.#tools.refreshMCPTools(mcpTools);
 	}

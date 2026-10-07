@@ -2763,9 +2763,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Built-in tools get it in `createTools`; extension, SDK-custom, image-gen,
 		// TTS, and startup (non-deferred) MCP tools all funnel through here, so apply
 		// it once at this adapter boundary (idempotent — a no-op if already wrapped).
-		const wrappedExtensionTools: Tool[] = deduplicateMCPToolsByName(
-			wrapRegisteredTools(allCustomTools, extensionRunner).map(wrapToolWithMetaNotice),
+		const wrappedExtensionCandidates = wrapRegisteredTools(allCustomTools, extensionRunner).map(
+			wrapToolWithMetaNotice,
 		);
+		const wrappedExtensionTools: Tool[] = deduplicateMCPToolsByName(wrappedExtensionCandidates);
 		const initialMcpManagerToolNames = new Set<string>();
 		for (const tool of wrappedExtensionTools) {
 			const originKey = getMCPToolOriginKey(tool);
@@ -3291,8 +3292,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		};
 
 		const transformContext = async (messages: AgentMessage[], _signal?: AbortSignal) => {
+			// Sample the committed registry at the request boundary, not when a
+			// refresh is queued. One replaceable snapshot avoids stale accumulated
+			// notices, survives context compaction, and never drives an extra turn.
+			const capabilityNotice = session?.getMCPCapabilityNotice();
 			const withContext = await extensionRunner.emitContext(messages);
-			return wrapSteeringForModel(withContext);
+			return wrapSteeringForModel(capabilityNotice ? [...withContext, capabilityNotice] : withContext);
 		};
 		// Per-request provider-context transforms. Obfuscate FIRST so secrets are
 		// redacted from text before snapcompact rasterizes it into PNG frames. Clamp
@@ -3627,6 +3632,19 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					: undefined,
 			builtInToolNames: builtInRegistryToolNames,
 			mcpManagerToolNames: initialMcpManagerToolNames,
+			mcpManagerCandidates: initialMcpManagerTools,
+			mcpExtensionCandidates: allCustomTools
+				.filter(registered => {
+					const tool = registered.definition;
+					const origin = getMCPToolOriginKey(tool);
+					return (
+						origin !== undefined &&
+						!initialMcpManagerTools.some(
+							managerTool => managerTool.name === tool.name && getMCPToolOriginKey(managerTool) === origin,
+						)
+					);
+				})
+				.map(registered => ({ owner: registered.extensionPath, tool: registered.definition })),
 			transformContext,
 			transformProviderContext,
 			onPayload,
@@ -3701,6 +3719,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			const isEffectiveRegistrant = extensionRunner.getRegisteredTool(name) === registered;
 			const activation = session.runToolRegistryMutation(async () => {
 				activationSignal.throwIfAborted();
+				// A losing registration is still a real unavailable route. Track it
+				// per extension owner so re-registration replaces, rather than leaks,
+				// the previous origin and activation rollback remains transactional.
+				session.recordExtensionMCPCandidate(registered.extensionPath, liveTool);
 				const existingTool = toolRegistry.get(name);
 				const previousExtensionMcpTool = session.getExtensionMCPTool(name);
 				const wasMcpManagerTool = session.hasMCPManagerTool(name);

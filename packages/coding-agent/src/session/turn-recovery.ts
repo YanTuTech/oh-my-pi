@@ -29,6 +29,7 @@ import { formatModelStringWithRouting, resolveModelOverride } from "../config/mo
 import type { Settings } from "../config/settings";
 import type { RetryErrorUpdate } from "../extensibility/shared-events";
 import emptyStopRetryTemplate from "../prompts/system/empty-stop-retry.md" with { type: "text" };
+import incompleteOutputRetryPrompt from "../prompts/system/incomplete-output-retry.md" with { type: "text" };
 import thinkingLoopRedirectTemplate from "../prompts/system/thinking-loop-redirect.md" with { type: "text" };
 import unexpectedStopRetryTemplate from "../prompts/system/unexpected-stop-retry.md" with { type: "text" };
 import {
@@ -70,6 +71,7 @@ const THINKING_LOOP_REDIRECT_TYPE = "thinking-loop-redirect";
 const UNEXPECTED_STOP_MAX_RETRIES = 3;
 const UNEXPECTED_STOP_TIMEOUT_MS = 4000;
 const EMPTY_STOP_MAX_RETRIES = 3;
+const INCOMPLETE_OUTPUT_MAX_RETRIES = 1;
 const SIBLING_UNBLOCK_BUFFER_MS = 1_000;
 const NON_WHITESPACE_RE = /\S/;
 const USAGE_PREFLIGHT_BLOCKED_PREFIX = "Usage preflight blocked:";
@@ -204,6 +206,7 @@ export class TurnRecovery {
 	#pendingRetryErrors: PendingRetryError[] = [];
 	#usageLimitOutcomes = new WeakMap<AssistantMessage, Promise<UsageLimitOutcome>>();
 	#emptyStopRetryCount = 0;
+	#incompleteOutputRetryCount = 0;
 	#unexpectedStopRetryCount = 0;
 	#acceptTerminalEmptyStopForPrompt = false;
 	// Three fields sit near the word "serve" and are deliberately distinct:
@@ -326,6 +329,7 @@ export class TurnRecovery {
 	/** Resets per-prompt recovery counters and terminal-stop acceptance. */
 	resetForNewPrompt(): void {
 		this.#emptyStopRetryCount = 0;
+		this.#incompleteOutputRetryCount = 0;
 		this.#unexpectedStopRetryCount = 0;
 		this.#acceptTerminalEmptyStopForPrompt = false;
 	}
@@ -418,7 +422,7 @@ export class TurnRecovery {
 		return this.#dropPersistedAssistantTurn(message);
 	}
 
-	/** Runs recovery compaction and restores the failed turn when no rewrite occurs. */
+	/** Runs recovery compaction, then restores or safely replaces an uncommitted failed turn. */
 	runRecoveryCompactionWithRollback(
 		reason: "overflow" | "incomplete",
 		message: AssistantMessage,
@@ -879,18 +883,18 @@ export class TurnRecovery {
 	/**
 	 * Drop the failed assistant turn from persisted history, run
 	 * {@link #runAutoCompaction} for an `overflow` / `incomplete` recovery, and
-	 * restore the assistant entry if compaction did not actually commit
-	 * anything (no usable model/preparation, hook cancel, compaction error,
-	 * or a no-progress automatic-continuation block before any summary was
-	 * written).
+	 * restore the assistant entry if compaction did not actually commit anything
+	 * (no usable model/preparation, hook cancel, or compaction error). The sole
+	 * exception is a replay-safe reasoning-only `incomplete` dead-end: one directed
+	 * continuation durably keeps that turn dropped, and a repeat settles terminally.
 	 *
 	 * Compaction has to see a clean branch — otherwise its `prepareCompaction`
 	 * pass would keep the failed turn in the kept region and the retry would
 	 * replay it. But a return that was not paired with a fresh compaction
-	 * summary or a successful history rewrite means no recovery is in progress,
-	 * even if queued user input gets drained next. Restoring the failed turn
-	 * before that continuation preserves the visible stop reason and rebuilds the
-	 * active assistant tail that `Agent.continue()` needs to dequeue follow-ups.
+	 * summary or a successful history rewrite normally means no recovery is in
+	 * progress, even if queued user input gets drained next. Restoring the failed
+	 * turn before that continuation preserves the visible stop reason and rebuilds
+	 * the active assistant tail that `Agent.continue()` needs to dequeue follow-ups.
 	 */
 	async #runRecoveryCompactionWithRollback(
 		reason: "overflow" | "incomplete",
@@ -898,18 +902,76 @@ export class TurnRecovery {
 		allowDefer: boolean,
 		options: { autoContinue: boolean; triggerContextTokens?: number },
 	): Promise<RecoveryCompactionResult> {
+		const generation = this.#host.promptGeneration();
 		const compactionEntryBefore = getLatestCompactionEntry(this.#host.sessionManager.getBranch());
-		await this.dropPersistedAssistantTurn(assistantMessage);
+		const droppedEntryId = await this.dropPersistedAssistantTurn(assistantMessage);
 		const result = await this.#host.runAutoCompaction(reason, true, false, allowDefer, {
 			autoContinue: options.autoContinue,
 			triggerContextTokens: options.triggerContextTokens,
 			phase: "mid_turn",
 		});
 		const compactionEntryAfter = getLatestCompactionEntry(this.#host.sessionManager.getBranch());
-		if (result.historyRewritten !== true && compactionEntryAfter === compactionEntryBefore) {
+		const shouldRollback = result.historyRewritten !== true && compactionEntryAfter === compactionEntryBefore;
+		if (!shouldRollback) return result;
+
+		const canRetryIncompleteOutput =
+			reason === "incomplete" &&
+			options.autoContinue &&
+			result.automaticContinuationBlocked === true &&
+			this.#host.promptGeneration() === generation &&
+			this.#isReasoningOnlyIncompleteOutput(assistantMessage);
+		if (!canRetryIncompleteOutput) {
 			this.#restoreFailedAssistantTurn(assistantMessage);
+			return result;
 		}
-		return result;
+
+		// The compaction attempt made no durable progress, but output exhaustion is
+		// not evidence that the input context itself is invalid. Keep the already
+		// discarded reasoning-only turn off the active branch and persist that branch
+		// choice before retrying, so reload cannot resurrect the 64k dead turn.
+		if (droppedEntryId) await this.#host.sessionManager.discardEntryDurably(droppedEntryId);
+
+		// One directed retry breaks deterministic same-prompt repetition without
+		// turning output exhaustion into an unbounded loop. A cancellation or newer
+		// prompt that advanced the generation while the durable rewrite was in flight
+		// wins and leaves the blocked result terminal.
+		if (this.#host.promptGeneration() !== generation) return result;
+		if (this.#incompleteOutputRetryCount >= INCOMPLETE_OUTPUT_MAX_RETRIES) {
+			logger.warn("Reasoning-only output limit reached after directed retry", {
+				attempts: this.#incompleteOutputRetryCount,
+				model: assistantMessage.model,
+				provider: assistantMessage.provider,
+			});
+			return result;
+		}
+
+		this.#incompleteOutputRetryCount++;
+		this.#host.agent.appendMessage({
+			role: "developer",
+			content: [{ type: "text", text: incompleteOutputRetryPrompt }],
+			attribution: "agent",
+			timestamp: Date.now(),
+		});
+		this.#host.scheduleAgentContinue({ generation });
+		return { deferredHandoff: false, continuationScheduled: true };
+	}
+
+	#isReasoningOnlyIncompleteOutput(message: AssistantMessage): boolean {
+		if (message.stopReason !== "length") return false;
+		let hasReasoning = (message.usage.reasoningTokens ?? 0) > 0;
+		for (const block of message.content) {
+			if (block.type === "thinking") {
+				hasReasoning ||= hasNonWhitespace(block.thinking);
+				continue;
+			}
+			if (block.type === "redactedThinking") {
+				hasReasoning = true;
+				continue;
+			}
+			if (block.type === "text" && !hasNonWhitespace(block.text)) continue;
+			return false;
+		}
+		return hasReasoning;
 	}
 
 	#restoreFailedAssistantTurn(assistantMessage: AssistantMessage): void {

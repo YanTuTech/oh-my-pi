@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Agent } from "@oh-my-pi/pi-agent-core";
+import { Agent, type AgentMessage } from "@oh-my-pi/pi-agent-core";
 import * as compactionModule from "@oh-my-pi/pi-agent-core/compaction";
 import { type CompactionPreparation, resolveThresholdTokens, shouldCompact } from "@oh-my-pi/pi-agent-core/compaction";
 import type { AssistantMessage } from "@oh-my-pi/pi-ai";
@@ -194,6 +194,43 @@ describe("AgentSession auto-compaction progress guard", () => {
 
 	function contentfulOverflowAssistant() {
 		return overflowAssistant([{ type: "text" as const, text: "prompt is too long" }]);
+	}
+
+	function outputLimitedAssistant(content: AssistantMessage["content"]): AssistantMessage {
+		return {
+			role: "assistant",
+			content,
+			api: "anthropic-messages",
+			provider: "anthropic",
+			model: "claude-sonnet-4-5",
+			stopReason: "length",
+			usage: {
+				input: 10_000,
+				output: 64_000,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 74_000,
+				reasoningTokens: 64_000,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			timestamp: Date.now(),
+		};
+	}
+
+	function emitSettledAssistant(message: AssistantMessage): void {
+		session.agent.appendMessage(message);
+		session.agent.emitExternalEvent({ type: "message_end", message });
+		session.agent.emitExternalEvent({ type: "agent_end", messages: [message] });
+	}
+
+	function waitForNextCompactionEnd(): Promise<void> {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		const unsubscribe = session.subscribe(event => {
+			if (event.type !== "auto_compaction_end") return;
+			unsubscribe();
+			resolve();
+		});
+		return promise;
 	}
 
 	function collectNotices() {
@@ -933,6 +970,186 @@ describe("AgentSession auto-compaction progress guard", () => {
 					stopReason: "length",
 				}),
 			}),
+		);
+	});
+
+	it("durably drops one reasoning-only length dead-end and retries with a directed reminder", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
+		vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		let continuationContext: readonly AgentMessage[] = [];
+		const continueSpy = vi.spyOn(session.agent, "continue").mockImplementation(async () => {
+			continuationContext = [...session.agent.state.messages];
+		});
+		const agentEnds: boolean[] = [];
+		session.subscribe(event => {
+			if (event.type === "agent_end") agentEnds.push(event.isTerminal === true);
+		});
+
+		const compactionDone = waitForNextCompactionEnd();
+		// OpenAI Responses can report the entire output budget as reasoning usage
+		// while exposing no content blocks at all.
+		const assistantMsg = outputLimitedAssistant([]);
+		emitSettledAssistant(assistantMsg);
+
+		await compactionDone;
+		await session.waitForIdle();
+
+		expect(continueSpy).toHaveBeenCalledTimes(1);
+		expect(agentEnds).toEqual([false]);
+		expect(continuationContext.at(-1)).toMatchObject({
+			role: "developer",
+			attribution: "agent",
+			content: [
+				expect.objectContaining({
+					type: "text",
+					text: expect.stringMatching(/output limit[\s\S]*directly produce/i),
+				}),
+			],
+		});
+		expect(sessionManager.getBranch()).not.toContainEqual(
+			expect.objectContaining({
+				type: "message",
+				message: expect.objectContaining({ stopReason: "length" }),
+			}),
+		);
+		expect(sessionManager.getBranch().at(-1)).toMatchObject({
+			type: "branch_summary",
+			details: expect.objectContaining({ kind: "discarded-entry-branch" }),
+		});
+	});
+
+	it("stops after the directed reasoning-only length retry is exhausted", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
+		vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
+		const agentEnds: boolean[] = [];
+		session.subscribe(event => {
+			if (event.type === "agent_end") agentEnds.push(event.isTerminal === true);
+		});
+
+		let compactionDone = waitForNextCompactionEnd();
+		emitSettledAssistant(outputLimitedAssistant([{ type: "thinking", thinking: "First reasoning run" }]));
+		await compactionDone;
+		await session.waitForIdle();
+
+		compactionDone = waitForNextCompactionEnd();
+		emitSettledAssistant(outputLimitedAssistant([{ type: "thinking", thinking: "Repeated reasoning run" }]));
+		await compactionDone;
+		await session.waitForIdle();
+
+		expect(continueSpy).toHaveBeenCalledTimes(1);
+		expect(agentEnds).toEqual([false, true]);
+		expect(
+			session.agent.state.messages.filter(
+				message =>
+					message.role === "developer" &&
+					Array.isArray(message.content) &&
+					message.content.some(
+						block => block.type === "text" && /output limit[\s\S]*directly produce/i.test(block.text),
+					),
+			),
+		).toHaveLength(1);
+		expect(sessionManager.getBranch()).not.toContainEqual(
+			expect.objectContaining({
+				type: "message",
+				message: expect.objectContaining({ stopReason: "length" }),
+			}),
+		);
+	});
+
+	it("does not replay a visible partial answer after length recovery dead-ends", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
+		vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
+
+		const compactionDone = waitForNextCompactionEnd();
+		const assistantMsg = outputLimitedAssistant([
+			{ type: "thinking", thinking: "Reasoning" },
+			{ type: "text", text: "Visible partial answer" },
+		]);
+		emitSettledAssistant(assistantMsg);
+
+		await compactionDone;
+		await session.waitForIdle();
+
+		expect(continueSpy).not.toHaveBeenCalled();
+		expect(sessionManager.getBranch()).toContainEqual(
+			expect.objectContaining({
+				type: "message",
+				message: expect.objectContaining({ stopReason: "length", content: assistantMsg.content }),
+			}),
+		);
+	});
+
+	it("does not replay a truncated tool call after length recovery dead-ends", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
+		vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
+
+		const compactionDone = waitForNextCompactionEnd();
+		const assistantMsg = outputLimitedAssistant([
+			{ type: "thinking", thinking: "Reasoning" },
+			{ type: "toolCall", id: "truncated-read", name: "read", arguments: { path: "README.md" } },
+		]);
+		emitSettledAssistant(assistantMsg);
+
+		await compactionDone;
+		await session.waitForIdle();
+
+		expect(continueSpy).not.toHaveBeenCalled();
+		expect(sessionManager.getBranch()).toContainEqual(
+			expect.objectContaining({
+				type: "message",
+				message: expect.objectContaining({ stopReason: "length", content: assistantMsg.content }),
+			}),
+		);
+	});
+
+	it("does not use the drop-only retry when compaction returns an ordinary no-op", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(modelRegistry, "getAvailable").mockReturnValue([]);
+		vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
+
+		const compactionDone = waitForNextCompactionEnd();
+		const assistantMsg = outputLimitedAssistant([{ type: "thinking", thinking: "Reasoning" }]);
+		emitSettledAssistant(assistantMsg);
+
+		await compactionDone;
+		await session.waitForIdle();
+
+		expect(continueSpy).not.toHaveBeenCalled();
+		expect(sessionManager.getBranch()).toContainEqual(
+			expect.objectContaining({
+				type: "message",
+				message: expect.objectContaining({ stopReason: "length", content: assistantMsg.content }),
+			}),
+		);
+		expect(session.agent.state.messages).not.toContainEqual(
+			expect.objectContaining({ role: "developer", attribution: "agent" }),
+		);
+	});
+
+	it("does not schedule a hidden retry during pre-prompt incomplete recovery", async () => {
+		session.settings.set("contextPromotion.enabled", false);
+		vi.spyOn(compactionModule, "prepareCompaction").mockReturnValue(undefined);
+		const promptSpy = vi.spyOn(session.agent, "prompt").mockResolvedValue(undefined as never);
+		const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
+		const assistantMsg = outputLimitedAssistant([{ type: "thinking", thinking: "Reasoning" }]);
+		sessionManager.appendMessage(assistantMsg);
+		session.agent.appendMessage(assistantMsg);
+
+		await session.prompt("A new user-authored follow-up");
+		await session.waitForIdle();
+
+		expect(promptSpy).toHaveBeenCalledTimes(1);
+		expect(continueSpy).not.toHaveBeenCalled();
+		expect(session.agent.state.messages).not.toContainEqual(
+			expect.objectContaining({ role: "developer", attribution: "agent" }),
 		);
 	});
 
