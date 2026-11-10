@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed DeepSeek thinking-mode replies showing raw `<thought>` analysis as answer text, while preserving code examples and native reasoning.
+
 ## [18.0.4] - 2026-08-24
 
 ### Fixed

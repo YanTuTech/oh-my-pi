@@ -25,8 +25,17 @@ const TAGS: readonly Tag[] = [
 	{ open: "<|channel|>analysis<|message|>", close: "<|end|>" }, // harmony analysis (bare leak)
 ];
 const OPENS = TAGS.map(tag => tag.open);
+const THOUGHT_TAGS: readonly Tag[] = [...TAGS, { open: "<thought>", close: "</thought>" }];
+const THOUGHT_OPENS = THOUGHT_TAGS.map(tag => tag.open);
+
+export interface ThinkingInbandScannerOptions {
+	/** Opt in only for a reasoning route known to leak this non-canonical alias. */
+	readonly thoughtTag?: boolean;
+}
 
 export class ThinkingInbandScanner implements InbandScanner {
+	readonly #tags: readonly Tag[];
+	readonly #opens: readonly string[];
 	#buffer = "";
 	#closeTag = "";
 	#thinking = "";
@@ -42,6 +51,11 @@ export class ThinkingInbandScanner implements InbandScanner {
 	 * stream — or one indented ≤3 spaces, as CommonMark allows — is recognized.
 	 */
 	#lineIndent = 0;
+
+	constructor(options: ThinkingInbandScannerOptions = {}) {
+		this.#tags = options.thoughtTag ? THOUGHT_TAGS : TAGS;
+		this.#opens = options.thoughtTag ? THOUGHT_OPENS : OPENS;
+	}
 
 	feed(text: string): InbandScanEvent[] {
 		if (text.length === 0) return [];
@@ -101,7 +115,7 @@ export class ThinkingInbandScanner implements InbandScanner {
 				break;
 			}
 
-			const hit = scanVisible(this.#buffer, final);
+			const hit = scanVisible(this.#buffer, final, this.#tags, this.#opens);
 			if (hit.kind === "none") {
 				this.#emitText(this.#buffer, events);
 				this.#buffer = "";
@@ -206,13 +220,13 @@ type VisibleHit =
  * healed instead of being read as a code fence. Backtick runs enter code mode so
  * a literal `<think>` inside inline code or a fenced block stays visible text.
  */
-function scanVisible(buffer: string, final: boolean): VisibleHit {
+function scanVisible(buffer: string, final: boolean, tags: readonly Tag[], opens: readonly string[]): VisibleHit {
 	for (let i = 0; i < buffer.length; i++) {
-		const tag = TAGS.find(candidate => buffer.startsWith(candidate.open, i));
+		const tag = tags.find(candidate => buffer.startsWith(candidate.open, i));
 		if (tag) return { kind: "tag", index: i, tag };
 		if (!final) {
 			const rest = buffer.slice(i);
-			if (OPENS.some(open => open.length > rest.length && open.startsWith(rest))) {
+			if (opens.some(open => open.length > rest.length && open.startsWith(rest))) {
 				return { kind: "hold", index: i };
 			}
 		}

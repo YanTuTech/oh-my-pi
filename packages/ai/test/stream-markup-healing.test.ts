@@ -246,6 +246,156 @@ describe("openai-completions leaked thinking healing", () => {
 	});
 });
 
+describe("DeepSeek thought-tag leakage on thinking completions", () => {
+	const model = buildModel({
+		id: "deepseek-v4.1-flash",
+		name: "DeepSeek V4.1 Flash",
+		api: "openai-completions",
+		provider: "opencode-go",
+		baseUrl: "https://example.invalid/v1",
+		reasoning: true,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 1_000_000,
+		maxTokens: 8_192,
+	});
+
+	async function run(
+		deltas: readonly SseChoiceDelta[],
+		options: {
+			model?: Model<"openai-completions">;
+			disableReasoning?: boolean;
+			finish?: "stop" | "tool_calls";
+		} = {},
+	) {
+		const selectedModel = options.model ?? model;
+		const response = streamOpenAICompletions(
+			selectedModel,
+			{ ...baseContext(), tools: [readTool] },
+			{
+				apiKey: "test",
+				reasoning: "high",
+				disableReasoning: options.disableReasoning,
+				fetch: mockFetch([
+					...deltas.map(delta => chunk(selectedModel.id, delta)),
+					chunk(selectedModel.id, {}, options.finish ?? "stop"),
+					"[DONE]",
+				]),
+			},
+		);
+		let liveText = "";
+		let liveThinking = "";
+		for await (const event of response) {
+			if (event.type === "text_delta") liveText += event.delta;
+			else if (event.type === "thinking_delta") liveThinking += event.delta;
+		}
+		const result = await response.result();
+		const text = result.content
+			.filter(b => b.type === "text")
+			.map(b => b.text)
+			.join("");
+		const thinking = result.content
+			.filter(b => b.type === "thinking")
+			.map(b => b.thinking)
+			.join("");
+		return { result, liveText, liveThinking, text, thinking };
+	}
+
+	it("keeps character-streamed thought text out of live and final answers despite a blank native reasoning field", async () => {
+		const input = "<thought>PRIVATE_PLAN</thought>图表已检查完成。";
+		const output = await run([{ reasoning_content: " " }, ...[...input].map(content => ({ content }))]);
+		expect(output.liveText).toBe("图表已检查完成。");
+		expect(output.text).toBe(output.liveText);
+		expect(output.liveThinking.trim()).toBe("PRIVATE_PLAN");
+		expect(output.thinking).toBe(output.liveThinking);
+		expect(output.result.content.find(b => b.type === "thinking")?.thinkingSignature).toBe("reasoning_content");
+	});
+
+	it("recovers thought text when the host sends no native reasoning field", async () => {
+		const output = await run([{ content: "<thought>PRIVATE_PLAN</thought>已完成。" }]);
+		expect(output.liveText).toBe("已完成。");
+		expect(output.text).toBe(output.liveText);
+		expect(output.thinking).toBe("PRIVATE_PLAN");
+	});
+
+	it("retains real native reasoning once and suppresses its leaked copy after a whitespace prefix", async () => {
+		const output = await run([
+			{ reasoning_content: " " },
+			{ reasoning_content: "NATIVE_PLAN" },
+			{ content: "<thought>NATIVE_PLAN</thought>已完成。" },
+		]);
+		expect(output.liveText).toBe("已完成。");
+		expect(output.text).toBe(output.liveText);
+		expect(output.thinking).toBe(" NATIVE_PLAN");
+		expect(output.liveThinking).toBe(output.thinking);
+		expect(output.result.content.find(b => b.type === "thinking")?.thinkingSignature).toBe("reasoning_content");
+	});
+
+	it("keeps an unclosed thought out of the reply while preserving the following structured tool call", async () => {
+		const output = await run(
+			[
+				{ reasoning_content: " " },
+				{ content: "<thought>PRIVATE_PLAN" },
+				{
+					tool_calls: [
+						{
+							index: 0,
+							id: "call_read_original",
+							type: "function",
+							function: { name: "read", arguments: '{"path":"report.md"}' },
+						},
+					],
+				},
+			],
+			{ finish: "tool_calls" },
+		);
+		expect(output.liveText).toBe("");
+		expect(output.text).toBe("");
+		expect(output.thinking.trim()).toBe("PRIVATE_PLAN");
+		expect(output.result.stopReason).toBe("toolUse");
+		expect(
+			output.result.content
+				.filter(b => b.type === "toolCall")
+				.map(({ type, id, name, arguments: args }) => ({ type, id, name, arguments: args })),
+		).toEqual([{ type: "toolCall", id: "call_read_original", name: "read", arguments: { path: "report.md" } }]);
+	});
+
+	for (const [kind, input] of [
+		["inline code", "用 `<thought>literal</thought>` 展示标签。"],
+		["fenced code", "```xml\n<thought>literal</thought>\n```\n示例结束。"],
+		["escaped or unrelated markup", "&lt;thought&gt;literal&lt;/thought&gt; <thoughtful>保留</thoughtful>"],
+	] as const) {
+		it(`preserves literal thought markup in ${kind} across delta boundaries`, async () => {
+			const output = await run([{ reasoning_content: " " }, ...[...input].map(content => ({ content }))]);
+			expect(output.liveText).toBe(input);
+			expect(output.text).toBe(input);
+			expect(output.thinking).toBe(" ");
+		});
+	}
+
+	it("leaves thought markup visible on a different model family", async () => {
+		const input = "<thought>application XML</thought>";
+		const otherModel: Model<"openai-completions"> = {
+			...model,
+			id: "other-reasoning-model",
+			name: "Other reasoning model",
+			provider: "openrouter",
+		};
+		const output = await run([{ content: input }], { model: otherModel });
+		expect(output.liveText).toBe(input);
+		expect(output.text).toBe(input);
+		expect(output.thinking).toBe("");
+	});
+
+	it("leaves thought markup visible when DeepSeek reasoning is explicitly disabled", async () => {
+		const input = "<thought>application XML</thought>";
+		const output = await run([{ content: input }], { disableReasoning: true });
+		expect(output.liveText).toBe(input);
+		expect(output.text).toBe(input);
+		expect(output.thinking).toBe("");
+	});
+});
+
 describe("official OpenAI leaked thinking healing exemption", () => {
 	// The official OpenAI endpoint returns structured reasoning and never leaks
 	// fences, so neither the provider-local healer nor the central

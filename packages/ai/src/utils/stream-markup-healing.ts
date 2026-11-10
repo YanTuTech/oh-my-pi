@@ -28,6 +28,8 @@ export type StreamMarkupHealingPattern = "kimi" | "dsml" | "qwen" | "thinking";
 
 export interface StreamMarkupHealingOptions {
 	readonly pattern: StreamMarkupHealingPattern;
+	/** Provider-owned opt-in; other routes retain literal <thought> markup. */
+	readonly thoughtTag?: boolean;
 }
 
 export type StreamMarkupHealingEvent =
@@ -54,12 +56,13 @@ export class StreamMarkupHealing {
 	/** Provider tool-call grammar (Kimi tokens / DSML envelope); absent for plain text streams. */
 	readonly #toolScanner: InbandScanner | undefined;
 	/** Always-on healer for leaked reasoning idioms in the visible text channel. */
-	readonly #thinkingScanner = new ThinkingInbandScanner();
+	readonly #thinkingScanner: ThinkingInbandScanner;
 	#sectionTerminated = false;
 	readonly #completed: HealedToolCall[] = [];
 
 	constructor(options: StreamMarkupHealingOptions) {
 		this.#pattern = options.pattern;
+		this.#thinkingScanner = new ThinkingInbandScanner({ thoughtTag: options.thoughtTag === true });
 		this.#toolScanner =
 			options.pattern === "kimi"
 				? createInbandScanner("kimi")

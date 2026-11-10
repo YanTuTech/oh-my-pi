@@ -1,5 +1,5 @@
 import type { Effort } from "@oh-my-pi/pi-catalog/effort";
-import { isKimiModelId } from "@oh-my-pi/pi-catalog/identity";
+import { isDeepseekModelIdOrName, isKimiModelId } from "@oh-my-pi/pi-catalog/identity";
 import { resolveWireModelId } from "@oh-my-pi/pi-catalog/model-thinking";
 import { calculateCost } from "@oh-my-pi/pi-catalog/models";
 import type { ResolvedOpenAICompat } from "@oh-my-pi/pi-catalog/types";
@@ -977,8 +977,9 @@ const streamOpenAICompletionsOnce = (
 				}
 			};
 			const streamMarkupHealingPattern = policy.stream.markupHealingPattern;
+			const recoverThoughtTag = policy.reasoning.enabled && isDeepseekModelIdOrName(model.id);
 			const streamMarkupHealing = streamMarkupHealingPattern
-				? new StreamMarkupHealing({ pattern: streamMarkupHealingPattern })
+				? new StreamMarkupHealing({ pattern: streamMarkupHealingPattern, thoughtTag: recoverThoughtTag })
 				: undefined;
 			const explicitReasoningDeltasMayBeCumulative = policy.stream.reasoningDeltasMayBeCumulative;
 			let suppressHealedThinking = false;
@@ -1124,7 +1125,10 @@ const streamOpenAICompletionsOnce = (
 							foundReasoningField,
 							explicitReasoningDeltasMayBeCumulative ? "cumulative" : "delta",
 						);
-						suppressHealedThinking = true;
+						// DeepSeek may send only a whitespace placeholder in its native
+						// reasoning field while leaking the actual plan in visible text.
+						// Keep those bytes/signatures, but do not suppress the recovered plan.
+						if (!recoverThoughtTag || foundReasoningDelta.trim().length > 0) suppressHealedThinking = true;
 					}
 
 					const normalizedDeltaText = normalizeStreamingContentText(choice.delta.content);
